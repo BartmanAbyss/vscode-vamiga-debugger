@@ -60,7 +60,7 @@ export function formatAddress(address: number, sourceMap?: SourceMap): string {
  * @returns Formatted hex string like "0xff = 255"
  */
 export function formatNumber(value: number, length = 0) {
-  return formatHex(value, length) + " = " + value;
+  return `${formatHex(value, length)} | ${value} | ${formatBin(value, 0)}`;
 }
 
 /**
