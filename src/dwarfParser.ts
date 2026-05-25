@@ -1,10 +1,24 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // ELF and DWARF type definitions
+export enum ELFSectionFlags {
+  WRITE = 0x1,
+  ALLOC = 0x2,
+  EXECINSTR = 0x4,
+  MERGE = 0x10,
+  STRINGS = 0x20,
+  INFO_LINK = 0x40,
+  LINK_ORDER = 0x80,
+  OS_NONCONFORMING = 0x100,
+  GROUP = 0x200,
+  TLS = 0x400,
+  COMPRESSED = 0x800,
+}
+
 export interface ELFSectionHeader {
   name: string;
   type: number;
-  flags: number;
+  flags: ELFSectionFlags;
   addr: number;
   offset: number;
   size: number;
@@ -190,8 +204,12 @@ export const DW_FORM = {
  * @throws Error if the buffer is not a valid ELF file or lacks DWARF data
  */
 export function parseDwarf(elfBuffer: Buffer): DWARFData {
-  const view = new DataView(elfBuffer.buffer);
-
+  const view = new DataView(
+    elfBuffer.buffer,
+    elfBuffer.byteOffset,
+    elfBuffer.byteLength
+  );
+  
   // Check ELF magic
   if (
     elfBuffer[0] !== 0x7f ||
@@ -359,8 +377,8 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
   const strTabHeader = parseSectionHeader(strTabOffset);
   const stringTable = new Uint8Array(
     elfBuffer.buffer,
-    strTabHeader.offset,
-    strTabHeader.size,
+    elfBuffer.byteOffset + strTabHeader.offset,
+    strTabHeader.size
   );
 
   for (let i = 0; i < shnum; i++) {
@@ -492,7 +510,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
       case DW_FORM.block1: {
         const length = readUInt8(offset);
         return {
-          value: new Uint8Array(elfBuffer.buffer, offset + 1, length),
+          value: new Uint8Array(elfBuffer.buffer, elfBuffer.byteOffset + offset + 1, length),
           size: 1 + length,
         };
       }
@@ -501,7 +519,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
         return {
           value: new Uint8Array(
             elfBuffer.buffer,
-            offset + length.size,
+            elfBuffer.byteOffset + offset + length.size,
             length.value,
           ),
           size: length.size + length.value,
@@ -1096,7 +1114,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
     if (section) {
       debugStrings = new Uint8Array(
         elfBuffer.buffer,
-        section.offset,
+        elfBuffer.byteOffset + section.offset,
         section.size,
       );
     }
@@ -1115,4 +1133,22 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
     is64bit,
     isLittleEndian,
   };
+}
+
+export function formatSectionFlags(flags: ELFSectionFlags): string {
+  const parts: string[] = [];
+
+  if (flags & ELFSectionFlags.WRITE) parts.push("WRITE");
+  if (flags & ELFSectionFlags.ALLOC) parts.push("ALLOC");
+  if (flags & ELFSectionFlags.EXECINSTR) parts.push("EXECINSTR");
+  if (flags & ELFSectionFlags.MERGE) parts.push("MERGE");
+  if (flags & ELFSectionFlags.STRINGS) parts.push("STRINGS");
+  if (flags & ELFSectionFlags.INFO_LINK) parts.push("INFO_LINK");
+  if (flags & ELFSectionFlags.LINK_ORDER) parts.push("LINK_ORDER");
+  if (flags & ELFSectionFlags.OS_NONCONFORMING) parts.push("OS_NONCONFORMING");
+  if (flags & ELFSectionFlags.GROUP) parts.push("GROUP");
+  if (flags & ELFSectionFlags.TLS) parts.push("TLS");
+  if (flags & ELFSectionFlags.COMPRESSED) parts.push("COMPRESSED");
+
+  return parts.length ? parts.join(" | ") : "0";
 }
