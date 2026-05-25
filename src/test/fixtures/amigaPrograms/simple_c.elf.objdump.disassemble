@@ -1,0 +1,26 @@
+
+simple_c.elf:     file format elf32-m68k
+
+
+Disassembly of section .text:
+
+80000074 <func>:
+80000074:	4e55 0000      	link.w a5,#0
+80000078:	4e71           	nop
+8000007a:	4e5d           	unlk a5
+8000007c:	4e75           	rts
+
+8000007e <_start>:
+8000007e:	4e55 fff4      	link.w a5,#-12
+80000082:	2f2d fffc      	move.l -4(a5),-(sp)
+80000086:	4eba ffec      	jsr 80000074 <func>(pc)
+8000008a:	588f           	addq.l #4,sp
+8000008c:	2f2d fff8      	move.l -8(a5),-(sp)
+80000090:	4eba ffe2      	jsr 80000074 <func>(pc)
+80000094:	588f           	addq.l #4,sp
+80000096:	2f2d fff4      	move.l -12(a5),-(sp)
+8000009a:	4eba ffd8      	jsr 80000074 <func>(pc)
+8000009e:	588f           	addq.l #4,sp
+800000a0:	4e71           	nop
+800000a2:	4e5d           	unlk a5
+800000a4:	4e75           	rts

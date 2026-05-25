@@ -1011,7 +1011,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
 
     const strtabData = new Uint8Array(
       elfBuffer.buffer,
-      strtabSection.offset,
+      elfBuffer.byteOffset + strtabSection.offset,
       strtabSection.size,
     );
 
