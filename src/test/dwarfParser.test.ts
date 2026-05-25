@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
-import { parseDwarf } from '../dwarfParser';
+import { formatSectionFlags, parseDwarf } from '../dwarfParser';
 import * as path from 'path';
 
 describe('dwarfParser', () => {
@@ -71,5 +71,26 @@ describe('dwarfParser', () => {
     );
     // These should exist in the raw parsed data
     expect(artificialFiles.length).toBeGreaterThan(0);
+  });
+
+  it('should get DIEs from simple_c.elf', () => {
+    const testFile = path.join(__dirname, 'fixtures/amigaPrograms/simple_c.elf');
+    const buffer = readFileSync(testFile);
+
+    const result = parseDwarf(buffer);
+
+    let i = 0;
+    let output = 'Sections:\n';
+    output += "Idx Name          Size      VMA       LMA       File off  Algn\n";
+    for(const section of result.sections.values()) {
+      output += `${i.toString().padStart(3)} ${section.name.padEnd(12)}  ${section.size.toString(16).padStart(8, '0')}  ${section.addr.toString(16).padStart(8, '0')}  ${section.addr.toString(16).padStart(8, '0')}  ${section.offset.toString(16).padStart(8, '0')}\n`;
+      output += `                  ${formatSectionFlags(section.flags)}\n`;
+      i++;
+    }
+    console.log(output);
+
+    // TODO!
+    
+    const a = 0;
   });
 });
