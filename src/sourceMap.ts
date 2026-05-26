@@ -41,7 +41,7 @@ export class SourceMap {
         this.locationsByAddress.set(location.address, location);
       }
 
-      const pathKey = location.path.toUpperCase();
+      const pathKey = normalize(location.path).toUpperCase();
       const linesMap =
         this.locationsBySource.get(pathKey) || new Map<number, Location>();
 
