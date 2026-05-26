@@ -51,7 +51,7 @@ export interface AbbreviationEntry {
   code: number;
   tag: number;
   hasChildren: boolean;
-  attributes: Array<{ name: number; form: number }>;
+  attributes: Array<{ name: number; form: number; implicitConst?: number }>;
 }
 
 export interface FileEntry {
@@ -145,33 +145,228 @@ export interface DWARFData {
 
 // DWARF constants
 export const DW_TAG = {
-  compile_unit: 0x11,
-  subprogram: 0x2e,
-  variable: 0x34,
-  base_type: 0x24,
-  pointer_type: 0x0f,
-  structure_type: 0x13,
-  union_type: 0x17,
+  array_type: 0x01,
+  class_type: 0x02,
+  entry_point: 0x03,
   enumeration_type: 0x04,
+  formal_parameter: 0x05,
+  imported_declaration: 0x08,
+  label: 0x0a,
+  lexical_block: 0x0b,
+  member: 0x0d,
+  pointer_type: 0x0f,
+  reference_type: 0x10,
+  compile_unit: 0x11,
+  string_type: 0x12,
+  structure_type: 0x13,
+  subroutine_type: 0x15,
   typedef: 0x16,
+  union_type: 0x17,
+  unspecified_parameters: 0x18,
+  variant: 0x19,
+  common_block: 0x1a,
+  common_inclusion: 0x1b,
+  inheritance: 0x1c,
+  inlined_subroutine: 0x1d,
+  module: 0x1e,
+  ptr_to_member_type: 0x1f,
+  set_type: 0x20,
+  subrange_type: 0x21,
+  with_stmt: 0x22,
+  access_declaration: 0x23,
+  base_type: 0x24,
+  catch_block: 0x25,
+  const_type: 0x26,
+  constant: 0x27,
+  enumerator: 0x28,
+  file_type: 0x29,
+  friend: 0x2a,
+  namelist: 0x2b,
+  namelist_item: 0x2c,
+  namelist_items: 0x2c,
+  packed_type: 0x2d,
+  subprogram: 0x2e,
+  template_type_parameter: 0x2f,
+  template_type_param: 0x2f,
+  template_value_parameter: 0x30,
+  template_value_param: 0x30,
+  thrown_type: 0x31,
+  try_block: 0x32,
+  variant_part: 0x33,
+  variable: 0x34,
+  volatile_type: 0x35,
+  dwarf_procedure: 0x36,
+  restrict_type: 0x37,
+  interface_type: 0x38,
+  namespace: 0x39,
+  imported_module: 0x3a,
+  unspecified_type: 0x3b,
+  partial_unit: 0x3c,
+  imported_unit: 0x3d,
+  mutable_type: 0x3e,
+  condition: 0x3f,
+  shared_type: 0x40,
+  type_unit: 0x41,
+  rvalue_reference_type: 0x42,
+  template_alias: 0x43,
+  coarray_type: 0x44,
+  generic_subrange: 0x45,
+  dynamic_type: 0x46,
+  atomic_type: 0x47,
+  call_site: 0x48,
+  call_site_parameter: 0x49,
+  skeleton_unit: 0x4a,
+  immutable_type: 0x4b,
+  TI_far_type: 0x4080,
+  lo_user: 0x4080,
+  MIPS_loop: 0x4081,
+  TI_near_type: 0x4081,
+  TI_assign_register: 0x4082,
+  TI_ioport_type: 0x4083,
+  TI_restrict_type: 0x4084,
+  TI_onchip_type: 0x4085,
+  HP_array_descriptor: 0x4090,
+  format_label: 0x4101,
+  function_template: 0x4102,
+  class_template: 0x4103,
+  GNU_BINCL: 0x4104,
+  GNU_EINCL: 0x4105,
+  GNU_template_template_parameter: 0x4106,
+  GNU_template_template_param: 0x4106,
+  GNU_template_parameter_pack: 0x4107,
+  GNU_formal_parameter_pack: 0x4108,
+  GNU_call_site: 0x4109,
+  GNU_call_site_parameter: 0x410a,
+  SUN_function_template: 0x4201,
+  SUN_class_template: 0x4202,
+  SUN_struct_template: 0x4203,
+  SUN_union_template: 0x4204,
+  SUN_indirect_inheritance: 0x4205,
+  SUN_codeflags: 0x4206,
+  SUN_memop_info: 0x4207,
+  SUN_omp_child_func: 0x4208,
+  SUN_rtti_descriptor: 0x4209,
+  SUN_dtor_info: 0x420a,
+  SUN_dtor: 0x420b,
+  SUN_f90_interface: 0x420c,
+  SUN_fortran_vax_structure: 0x420d,
+  SUN_hi: 0x42ff,
+  ALTIUM_circ_type: 0x5101,
+  ALTIUM_mwa_circ_type: 0x5102,
+  ALTIUM_rev_carry_type: 0x5103,
+  ALTIUM_rom: 0x5111,
+  LLVM_annotation: 0x6000,
+  ghs_namespace: 0x8004,
+  ghs_using_namespace: 0x8005,
+  ghs_using_declaration: 0x8006,
+  ghs_template_templ_param: 0x8007,
+  upc_shared_type: 0x8765,
+  upc_strict_type: 0x8766,
+  upc_relaxed_type: 0x8767,
+  PGI_kanji_type: 0xa000,
+  PGI_interface_block: 0xa020,
+  BORLAND_property: 0xb000,
+  BORLAND_Delphi_string: 0xb001,
+  BORLAND_Delphi_dynamic_array: 0xb002,
+  BORLAND_Delphi_set: 0xb003,
+  BORLAND_Delphi_variant: 0xb004,
+  hi_user: 0xffff,
 } as const;
 
 export const DW_AT = {
+  sibling: 0x01,
+  location: 0x02,
   name: 0x03,
+  ordering: 0x09,
+  subscr_data: 0x0a,
+  byte_size: 0x0b,
+  bit_offset: 0x0c,
+  bit_size: 0x0d,
+  element_list: 0x0f,
+  stmt_list: 0x10,
   low_pc: 0x11,
   high_pc: 0x12,
   language: 0x13,
-  stmt_list: 0x10,
+  member: 0x14,
+  discr: 0x15,
+  discr_value: 0x16,
+  visibility: 0x17,
+  import: 0x18,
+  string_length: 0x19,
+  common_reference: 0x1a,
   comp_dir: 0x1b,
+  const_value: 0x1c,
+  containing_type: 0x1d,
+  default_value: 0x1e,
+  inline: 0x20,
+  is_optional: 0x21,
+  lower_bound: 0x22,
   producer: 0x25,
-  external: 0x3f,
+  prototyped: 0x27,
+  return_addr: 0x2a,
+  start_scope: 0x2c,
+  bit_stride: 0x2e,
+  stride_size: 0x2e,
+  upper_bound: 0x2f,
+  abstract_origin: 0x31,
+  accessibility: 0x32,
+  address_class: 0x33,
+  artificial: 0x34,
+  base_types: 0x35,
+  calling_convention: 0x36,
+  count: 0x37,
+  data_member_location: 0x38,
+  decl_column: 0x39,
+  decl_file: 0x3a,
+  decl_line: 0x3b,
   declaration: 0x3c,
+  discr_list: 0x3d,
+  encoding: 0x3e,
+  external: 0x3f,
+  frame_base: 0x40,
+  friend: 0x41,
+  identifier_case: 0x42,
+  macro_info: 0x43,
+  namelist_item: 0x44,
+  priority: 0x45,
+  segment: 0x46,
+  specification: 0x47,
+  static_link: 0x48,
   type: 0x49,
-  location: 0x02,
+  use_location: 0x4a,
+  variable_parameter: 0x4b,
+  virtuality: 0x4c,
+  vtable_elem_location: 0x4d,
+  allocated: 0x4e,
+  associated: 0x4f,
+  data_location: 0x50,
+  byte_stride: 0x51,
+  stride: 0x51,
+  entry_pc: 0x52,
+  use_UTF8: 0x53,
+  extension: 0x54,
+  ranges: 0x55,
+  trampoline: 0x56,
+  call_column: 0x57,
+  call_file: 0x58,
+  call_line: 0x59,
+  description: 0x5a,
+  binary_scale: 0x5b,
+  decimal_scale: 0x5c,
+  small: 0x5d,
+  decimal_sign: 0x5e,
+  digit_count: 0x5f,
+  picture_string: 0x60,
+  mutable: 0x61,
+  threads_scaled: 0x62,
+  explicit: 0x63,
+  call_all_tail_calls: 0x7c,
 } as const;
 
 export const DW_FORM = {
   addr: 0x01,
+  block2: 0x03,
+  block4: 0x04,
   data2: 0x05,
   data4: 0x06,
   data8: 0x07,
@@ -190,6 +385,57 @@ export const DW_FORM = {
   ref8: 0x14,
   ref_udata: 0x15,
   indirect: 0x16,
+  sec_offset: 0x17,
+  exprloc: 0x18,
+  flag_present: 0x19,
+  strx: 0x1a,
+  addrx: 0x1b,
+  ref_sup4: 0x1c,
+  strp_sup: 0x1d,
+  data16: 0x1e,
+  line_strp: 0x1f,
+  ref_sig8: 0x20,
+  implicit_const: 0x21,
+  loclistx: 0x22,
+  rnglistx: 0x23,
+  ref_sup8: 0x24,
+  strx1: 0x25,
+  strx2: 0x26,
+  strx3: 0x27,
+  strx4: 0x28,
+  addrx1: 0x29,
+  addrx2: 0x2a,
+  addrx3: 0x2b,
+  addrx4: 0x2c,
+  GNU_addr_index: 0x1f01,
+  GNU_str_index: 0x1f02,
+  GNU_ref_alt: 0x1f20,
+  GNU_strp_alt: 0x1f21,
+  LLVM_addrx_offset: 0x2001,
+} as const;
+
+export const DW_OP = {
+  addr: 0x03,
+  deref: 0x06,
+  const1u: 0x08,
+  const1s: 0x09,
+  const2u: 0x0a,
+  const2s: 0x0b,
+  const4u: 0x0c,
+  const4s: 0x0d,
+  const8u: 0x0e,
+  const8s: 0x0f,
+  dup: 0x10,
+  drop: 0x11,
+  over: 0x12,
+  pick: 0x13,
+  swap: 0x14,
+  rot: 0x15,
+  xderef: 0x16,
+  breg0: 0x70,
+  breg31: 0x8f,
+  fbreg: 0x91,
+  call_frame_cfa: 0x9c,
 } as const;
 
 /**
@@ -426,7 +672,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
     const hasChildren = readUInt8(currentOffset) === 1;
     currentOffset += 1;
 
-    const attributes: Array<{ name: number; form: number }> = [];
+    const attributes: Array<{ name: number; form: number; implicitConst?: number }> = [];
 
     while (true) {
       const name = readULEB128(currentOffset);
@@ -437,7 +683,15 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
 
       if (name.value === 0 && form.value === 0) break;
 
-      attributes.push({ name: name.value, form: form.value });
+      // Handle DW_FORM_implicit_const: its value is encoded in the
+      // abbreviation table as a SLEB128 following the form.
+      if (form.value === DW_FORM.implicit_const) {
+        const implicit = readSLEB128(currentOffset);
+        currentOffset += implicit.size;
+        attributes.push({ name: name.value, form: form.value, implicitConst: implicit.value });
+      } else {
+        attributes.push({ name: name.value, form: form.value });
+      }
     }
 
     return {
@@ -477,6 +731,12 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
           value: addressSize === 8 ? readUInt64(offset) : readUInt32(offset),
           size: addressSize,
         };
+      case DW_FORM.ref_addr:
+        // A reference encoded as an address (DW_FORM_ref_addr)
+        return {
+          value: addressSize === 8 ? readUInt64(offset) : readUInt32(offset),
+          size: addressSize,
+        };
       case DW_FORM.data1:
         return { value: readUInt8(offset), size: 1 };
       case DW_FORM.data2:
@@ -493,6 +753,9 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
         return { value: readUInt32(offset), size: 4 }; // Offset into .debug_str
       case DW_FORM.flag:
         return { value: readUInt8(offset) !== 0, size: 1 };
+      case DW_FORM.flag_present:
+        // DW_FORM_flag_present carries no data; its presence implies true
+        return { value: true, size: 0 };
       case DW_FORM.udata: {
         const uleb = readULEB128(offset);
         return { value: uleb.value, size: uleb.size };
@@ -525,10 +788,90 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
           size: length.size + length.value,
         };
       }
+      case DW_FORM.sec_offset:
+        // section offset (typically 4 bytes)
+        return { value: readUInt32(offset), size: 4 };
+      case DW_FORM.exprloc: {
+        const length = readULEB128(offset);
+        return {
+          value: new Uint8Array(
+            elfBuffer.buffer,
+            elfBuffer.byteOffset + offset + length.size,
+            length.value,
+          ),
+          size: length.size + length.value,
+        };
+      }
       default:
-        // Unknown form, skip 4 bytes as fallback
-        return { value: null, size: 4 };
+        throw new Error("DWARF parsing error: Unknown DW_FORM 0x" + form.toString(16));
     }
+  }
+
+  function parseLocationExpressionAt(baseOffset: number, length: number, addressSize: number) {
+    const ops: Array<any> = [];
+    let i = 0;
+    while (i < length) {
+      const op = view.getUint8(baseOffset + i);
+      i++;
+      // DW_OP_breg0..DW_OP_breg31 => 0x70..0x8f
+      if (op === DW_OP.addr) {
+        const addr = addressSize === 8 ? readUInt64(baseOffset + i) : readUInt32(baseOffset + i);
+        i += addressSize;
+        // Keep numeric address values in the parser; formatting to hex is
+        // handled by the dump/display functions only.
+        const rawAddr = addressSize === 8 ? addr : (addr >>> 0);
+        ops.push({ op: 'DW_OP_addr', value: rawAddr });
+      } else if (op >= DW_OP.breg0 && op <= DW_OP.breg31) {
+        const reg = op - DW_OP.breg0;
+        const sleb = readSLEB128(baseOffset + i);
+        i += sleb.size;
+        ops.push({ op: `DW_OP_breg${reg}`, reg, value: sleb.value });
+      } else if (op === DW_OP.fbreg) {
+        const sleb = readSLEB128(baseOffset + i);
+        i += sleb.size;
+        ops.push({ op: 'DW_OP_fbreg', value: sleb.value });
+      } else if (op === DW_OP.call_frame_cfa) {
+        ops.push({ op: 'DW_OP_call_frame_cfa' });
+      } else {
+        // Unknown or unimplemented op: try to decode common immediate sizes
+        // Handle simple consts: DW_OP_const1u (0x08), const1s (0x09), const2u (0x0a), const2s (0x0b), const4u (0x0c), const4s (0x0d), const8u (0x0e), const8s (0x0f)
+        switch (op) {
+          case DW_OP.const1u: // const1u
+            ops.push({ op: 'DW_OP_const1u', value: view.getUint8(baseOffset + i) });
+            i += 1;
+            break;
+          case DW_OP.const1s: // const1s
+            ops.push({ op: 'DW_OP_const1s', value: view.getInt8(baseOffset + i) });
+            i += 1;
+            break;
+          case DW_OP.const2u: // const2u
+            ops.push({ op: 'DW_OP_const2u', value: view.getUint16(baseOffset + i, isLittleEndian) });
+            i += 2;
+            break;
+          case DW_OP.const2s: // const2s
+            ops.push({ op: 'DW_OP_const2s', value: view.getInt16(baseOffset + i, isLittleEndian) });
+            i += 2;
+            break;
+          case DW_OP.const4u: // const4u
+            ops.push({ op: 'DW_OP_const4u', value: view.getUint32(baseOffset + i, isLittleEndian) >>> 0 });
+            i += 4;
+            break;
+          case DW_OP.dup: // dup, no operand
+          case DW_OP.drop:
+          case DW_OP.over:
+          case DW_OP.pick:
+          case DW_OP.swap:
+          case DW_OP.rot:
+          case DW_OP.xderef:
+            ops.push({ op: `DW_OP_0x${op.toString(16)}` });
+            break;
+          default:
+            ops.push({ op: `DW_OP_unknown_0x${op.toString(16)}` });
+            break;
+        }
+      }
+    }
+    return ops;
   }
 
   function parseDIE(
@@ -560,11 +903,14 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
 
     // Parse attributes according to the abbreviation entry
     for (const attrSpec of abbrevEntry.attributes) {
-      const attrValue = parseAttributeValue(
-        currentOffset,
-        attrSpec.form,
-        addressSize,
-      );
+      // DW_FORM.implicit_const carries its value in the abbreviation table
+      // and consumes no bytes in the DIE itself.
+      if (attrSpec.form === DW_FORM.implicit_const && attrSpec.implicitConst !== undefined) {
+        attributes.push({ name: attrSpec.name, form: attrSpec.form, value: attrSpec.implicitConst });
+        continue;
+      }
+
+      const attrValue = parseAttributeValue(currentOffset, attrSpec.form, addressSize);
 
       attributes.push({
         name: attrSpec.name,
@@ -579,10 +925,41 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
       abbrevCode: abbrevCode.value,
       tag: abbrevEntry.tag,
       attributes,
-      size: currentOffset - offset,
+      size: 0,
       children: [],
     };
 
+    // Post-process attributes: if a location expression block is present,
+    // parse DW_OP_* opcodes into a higher-level representation using the
+    // shared DataView and existing readers.
+    for (const attr of attributes) {
+      if ((attr.name === DW_AT.location || attr.name === DW_AT.frame_base) && attr.value instanceof Uint8Array) {
+        try {
+          const raw = attr.value as Uint8Array;
+          const baseOffset = raw.byteOffset - elfBuffer.byteOffset;
+          const ops = parseLocationExpressionAt(baseOffset, raw.length, addressSize);
+          attr.value = { raw, ops };
+        } catch (e) {
+          console.warn('Failed to parse location expression', e);
+        }
+      }
+    }
+
+    if (abbrevEntry.hasChildren) {
+      while (currentOffset < elfBuffer.length) {
+        const child = parseDIE(currentOffset, abbrevTable, addressSize);
+        if (!child) {
+          // Null DIE entry marks the end of children for this parent
+          currentOffset += 1;
+          break;
+        }
+
+        die.children.push(child);
+        currentOffset += child.size;
+      }
+    }
+
+    die.size = currentOffset - offset;
     return die;
   }
 
