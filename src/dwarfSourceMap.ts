@@ -8,7 +8,7 @@ import {
   LineNumberInstruction,
   LineNumberProgram,
 } from "./dwarfParser";
-import { SourceMap, ScopeEntry, Location, Segment } from "./sourceMap";
+import { SourceMap, ScopeEntry, LocalVariable, LocalLocation, Location, Segment } from "./sourceMap";
 import { MemoryType } from "./amigaHunkParser";
 
 /**
@@ -337,6 +337,86 @@ function getCuBasePc(cu: CompilationUnit): number {
   return 0;
 }
 
+function getTypeDie(die: DebugInfoEntry): DebugInfoEntry | undefined {
+  const attr = findAttribute(die, DW_AT.type);
+  return attr?.value?.die as DebugInfoEntry | undefined;
+}
+
+function typeNameFromDie(die: DebugInfoEntry, depth = 0): string {
+  if (depth > 8) return '<...>';
+  const tagName = (): string => findAttribute(die, DW_AT.name)?.value as string ?? '<anonymous>';
+  switch (die.tag) {
+    case DW_TAG.base_type:
+    case DW_TAG.typedef:
+      return findAttribute(die, DW_AT.name)?.value as string ?? '<unknown>';
+    case DW_TAG.pointer_type: {
+      const inner = getTypeDie(die);
+      return (inner ? typeNameFromDie(inner, depth + 1) : 'void') + ' *';
+    }
+    case DW_TAG.const_type: {
+      const inner = getTypeDie(die);
+      return 'const ' + (inner ? typeNameFromDie(inner, depth + 1) : 'void');
+    }
+    case DW_TAG.array_type: {
+      const inner = getTypeDie(die);
+      return (inner ? typeNameFromDie(inner, depth + 1) : '<unknown>') + '[]';
+    }
+    case DW_TAG.structure_type:   return 'struct ' + tagName();
+    case DW_TAG.union_type:       return 'union '  + tagName();
+    case DW_TAG.enumeration_type: return 'enum '   + tagName();
+    default: return '<unknown>';
+  }
+}
+
+function resolveLocation(
+  die: DebugInfoEntry,
+  relocate: (addr: number) => number | undefined,
+): LocalLocation {
+  const attr = findAttribute(die, DW_AT.location);
+  if (!attr || typeof attr.value !== 'object' || attr.value === null) return { kind: 'unknown' };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ops = attr.value.ops as Array<any> | undefined;
+  if (!ops || ops.length === 0) return { kind: 'unknown' };
+  const op = ops[0];
+  if (op.op === 'DW_OP_fbreg' && op.value !== undefined)
+    return { kind: 'fbreg', offset: op.value };
+  if (op.op.startsWith('DW_OP_breg') && op.reg !== undefined && op.value !== undefined)
+    return { kind: 'breg', reg: op.reg, offset: op.value };
+  if (op.op === 'DW_OP_addr' && op.value !== undefined) {
+    const address = relocate(op.value) ?? op.value;
+    return { kind: 'addr', address };
+  }
+  return { kind: 'unknown' };
+}
+
+function resolveByteSize(typeDie: DebugInfoEntry | undefined, addressSize: number, depth = 0): number {
+  if (!typeDie || depth > 8) return 0;
+  const byteSizeAttr = findAttribute(typeDie, DW_AT.byte_size);
+  if (byteSizeAttr && isNumber(byteSizeAttr.value)) return byteSizeAttr.value;
+  switch (typeDie.tag) {
+    case DW_TAG.pointer_type: return addressSize;
+    case DW_TAG.typedef:
+    case DW_TAG.const_type: {
+      const inner = getTypeDie(typeDie);
+      return resolveByteSize(inner, addressSize, depth + 1);
+    }
+    default: return 0;
+  }
+}
+
+function dieToLocalVar(
+  die: DebugInfoEntry,
+  relocate: (addr: number) => number | undefined,
+  addressSize: number,
+): LocalVariable {
+  const name = findAttribute(die, DW_AT.name)?.value as string | undefined ?? '???';
+  const typeDie = getTypeDie(die);
+  const typeName = typeDie ? typeNameFromDie(typeDie) : '<unknown>';
+  const byteSize = resolveByteSize(typeDie, addressSize);
+  const location = resolveLocation(die, relocate);
+  return { name, typeName, byteSize, location };
+}
+
 function buildScopeTable(
   dwarfData: DWARFData,
   relocate: (addr: number) => number | undefined,
@@ -355,9 +435,9 @@ function buildScopeTable(
       const currentInSubprogram = inSubprogram || die.tag === DW_TAG.subprogram;
 
       if (currentInSubprogram && (die.tag === DW_TAG.subprogram || die.tag === DW_TAG.lexical_block)) {
-        const vars = die.children.filter(
-          (c) => c.tag === DW_TAG.variable || c.tag === DW_TAG.formal_parameter,
-        );
+        const vars = die.children
+          .filter((c) => c.tag === DW_TAG.variable || c.tag === DW_TAG.formal_parameter)
+          .map((c) => dieToLocalVar(c, relocate, ctx.addressSize));
         if (vars.length > 0) {
           for (const interval of getDieIntervals(die, ctx)) {
             const relocLow = relocate(interval.low);

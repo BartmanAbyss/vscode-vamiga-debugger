@@ -1,13 +1,8 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
-import { DW_AT, DW_TAG, ELFSectionHeader, DebugInfoEntry, parseDwarf } from '../dwarfParser';
+import { ELFSectionHeader, parseDwarf } from '../dwarfParser';
 import { sourceMapFromDwarf } from '../dwarfSourceMap';
 import * as path from 'path';
-
-function getStringAttribute(die: DebugInfoEntry, name: number): string | undefined {
-  const attr = die.attributes.find((attr) => attr.name === name);
-  return typeof attr?.value === 'string' ? attr.value : undefined;
-}
 
 function isSectionIncluded(header: ELFSectionHeader): boolean {
   return header.size > 0 && (header.addr > 0 ||
@@ -84,9 +79,7 @@ describe('dwarfSourceMap', () => {
     const results = sourceMap.getLocalsForPc(location.address);
 
     expect(results.length).toBe(3);
-    expect(results.every((die) => die.tag === DW_TAG.variable)).toBe(true);
-
-    const names = results.map((die) => getStringAttribute(die, DW_AT.name)).sort();
+    const names = results.map((v) => v.name).sort();
     expect(names).toEqual(['local_a', 'local_b', 'local_c']);
   });
 
@@ -108,7 +101,6 @@ describe('dwarfSourceMap', () => {
     const results = sourceMap.getLocalsForPc(func + 4);
 
     expect(results.length).toBe(1);
-    expect(results[0].tag).toBe(DW_TAG.formal_parameter);
-    expect(getStringAttribute(results[0], DW_AT.name)).toBe('a');
+    expect(results[0].name).toBe('a');
   });
 });

@@ -1,11 +1,23 @@
 import { MemoryType } from "./amigaHunkParser";
 import { normalize } from "path";
-import { DebugInfoEntry } from "./dwarfParser";
+
+export type LocalLocation =
+  | { kind: 'fbreg';  offset: number }
+  | { kind: 'breg';   reg: number; offset: number }
+  | { kind: 'addr';   address: number }
+  | { kind: 'unknown' };
+
+export interface LocalVariable {
+  name: string;
+  typeName: string;
+  byteSize: number;
+  location: LocalLocation;
+}
 
 export interface ScopeEntry {
   low: number;
   high: number;
-  vars: DebugInfoEntry[];
+  vars: LocalVariable[];
 }
 
 export interface Location {
@@ -120,9 +132,9 @@ export class SourceMap {
     );
   }
 
-  // Returns all variable and parameter DIEs visible at the given loaded address.
+  // Returns all locals visible at the given loaded address.
   // Uses a binary search into the pre-built scope table: O(log n + nesting depth).
-  public getLocalsForPc(pc: number): DebugInfoEntry[] {
+  public getLocalsForPc(pc: number): LocalVariable[] {
     const table = this.scopeTable;
     if (table.length === 0) return [];
 
@@ -136,7 +148,7 @@ export class SourceMap {
     if (idx === -1) return [];
 
     // Scan backward collecting all scopes that contain pc.
-    const result: DebugInfoEntry[] = [];
+    const result: LocalVariable[] = [];
     for (let i = idx; i >= 0; i--) {
       if (table[i].high > pc) {
         result.push(...table[i].vars);

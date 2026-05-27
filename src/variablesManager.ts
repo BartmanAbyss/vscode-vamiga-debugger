@@ -1,6 +1,6 @@
 import { DebugProtocol } from "@vscode/debugprotocol";
 import { CpuInfo, VAmiga } from "./vAmiga";
-import { SourceMap, Location } from "./sourceMap";
+import { SourceMap, Location, LocalLocation } from "./sourceMap";
 import { Handles, Scope } from "@vscode/debugadapter";
 import { vectors, customAddresses } from "./hardware";
 import {
@@ -17,7 +17,6 @@ import {
 } from "./numbers";
 import * as registerParsers from "./amigaRegisterParsers";
 import { DisassemblyValue, MemoryArrayValue } from "./evaluateManager";
-import { DebugInfoEntry, DW_AT } from "./dwarfParser";
 
 /**
  * Manages variable inspection and scoping for the debug adapter.
@@ -53,19 +52,11 @@ export class VariablesManager {
 
   public getScopes(): DebugProtocol.Scope[] {
     return [
-      new Scope(
-        "CPU Registers",
-        this.variableHandles.create("registers"),
-        false,
-      ),
-      new Scope(
-        "Custom Registers",
-        this.variableHandles.create("custom"),
-        false,
-      ),
+      new Scope("Locals", this.variableHandles.create("locals"), false),
+      new Scope("CPU Registers", this.variableHandles.create("registers"), false),
+      new Scope("Custom Registers", this.variableHandles.create("custom"), false),
       new Scope("Vectors", this.variableHandles.create("vectors"), false),
       new Scope("Symbols", this.variableHandles.create("symbols"), false),
-      new Scope("Locals", this.variableHandles.create("locals"), false),
       new Scope("Segments", this.variableHandles.create("segments"), false),
     ];
   }
@@ -366,23 +357,50 @@ export class VariablesManager {
     }
   }
 
-  static getStringAttribute(die: DebugInfoEntry, name: number): string | undefined {
-    const attr = die.attributes.find((attr) => attr.name === name);
-    return typeof attr?.value === 'string' ? attr.value : undefined;
+  private locationToAddress(location: LocalLocation, cpuInfo: CpuInfo): number | undefined {
+    switch (location.kind) {
+      case 'fbreg': return Number(cpuInfo.a5) + location.offset;
+      case 'breg': {
+        const regName = location.reg < 8 ? `d${location.reg}` : `a${location.reg - 8}`;
+        return Number(cpuInfo[regName as keyof CpuInfo]) + location.offset;
+      }
+      case 'addr': return location.address;
+      default: return undefined;
+    }
   }
-  
+
   public async localVariables(): Promise<DebugProtocol.Variable[]> {
     const cpuInfo = await this.vAmiga.getCpuInfo();
-    const dies = this.sourceMap.getLocalsForPc(Number(cpuInfo.pc));
-    const locals = dies.map((die) => {
+    const rawLocals = this.sourceMap.getLocalsForPc(Number(cpuInfo.pc));
+    const locals = await Promise.all(rawLocals.map(async (v) => {
+      let value = '???';
+      const address = this.locationToAddress(v.location, cpuInfo);
+      if (address !== undefined) {
+        try {
+          if (v.byteSize === 4) {
+            const val = await this.vAmiga.peek32(address);
+            value = v.typeName.endsWith(' *') && this.vAmiga.isValidAddress(val)
+              ? formatAddress(val, this.sourceMap)
+              : formatNumber(val, 8);
+          } else if (v.byteSize === 2) {
+            const val = await this.vAmiga.peek16(address);
+            value = formatNumber(val, 4);
+          } else if (v.byteSize === 1) {
+            const val = await this.vAmiga.peek8(address);
+            value = formatNumber(val, 2);
+          }
+        } catch {
+          value = '???';
+        }
+      }
       return {
-        name: VariablesManager.getStringAttribute(die, DW_AT.name) || "???",
-        value: "???",
-        memoryReference: "???",
+        name: v.name,
+        value,
+        type: v.typeName,
         variablesReference: 0,
         presentationHint: { attributes: ["readOnly"] },
       };
-    });
+    }));
   // Sort by name
   // TODO: could make this a setting
     locals.sort((a, b) => (a.name < b.name ? -1 : 1));
