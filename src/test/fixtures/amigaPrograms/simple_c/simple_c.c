@@ -3,7 +3,7 @@ int global_a = 0x11111111;
 void func(int a) {
 }
 
-void _start() {
+__attribute__((used)) __attribute__((section(".text.unlikely"))) void _start() {
 	int local_a = 0x22222222;
 	func(local_a);
 	{
@@ -14,4 +14,5 @@ void _start() {
 			func(local_c);
 		}
 	}
+	while(1) {}
 }

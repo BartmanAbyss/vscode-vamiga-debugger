@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { describe, it, expect } from '@jest/globals';
 import * as path from 'path';
 import { readFileSync } from 'fs';

@@ -31,7 +31,7 @@ export function sourceMapFromDwarf(
   const segments: Segment[] = [];
 
   // Section offsets matching original, unfiltered indexes
-  const sectionOffsets = [];
+  const sectionOffsets: ({ loaded: true; offset: number } | { loaded: false })[] = [];
   let i = 0;
 
   // Build sections from ELF section headers
@@ -229,8 +229,9 @@ export function sourceMapFromDwarf(
 
   // Extract symbols from ELF symbol table
   for (const elfSymbol of dwarfData.elfSymbols) {
-    if (sectionOffsets[elfSymbol.sectionIndex]?.loaded) {
-      symbols[elfSymbol.name] = elfSymbol.value + sectionOffsets[elfSymbol.sectionIndex].offset;
+    const section = sectionOffsets[elfSymbol.sectionIndex];
+    if (section?.loaded) {
+      symbols[elfSymbol.name] = elfSymbol.value + section.offset;
     }
   }
 

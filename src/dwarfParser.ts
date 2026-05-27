@@ -922,6 +922,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
         attributes: [],
         size: abbrevCode.size,
         children: [],
+        offset: 0
       };
     }
 
