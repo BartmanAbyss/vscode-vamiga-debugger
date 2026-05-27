@@ -11,7 +11,7 @@
             "program": "${workspaceFolder}/simple_c.exe",
             "debugProgram": "${workspaceFolder}/simple_c.elf",
             "fastLoad": true,
-            "stopOnEntry": true,
+            "stopOnEntry": false,
             "emulatorOptions": {
                 "kickstartRomPath": "c:/amiga/kick13.rom",
                 "chipRam": "512k",

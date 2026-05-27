@@ -139,6 +139,7 @@ export interface DWARFData {
   compilationUnits: CompilationUnit[];
   lineNumberPrograms: LineNumberProgram[];
   debugStrings: Uint8Array | undefined;
+  debugRanges: Uint8Array | undefined;
   abbreviationTables: Map<number, AbbreviationEntry[]>;
   elfSymbols: ELFSymbol[];
   is64bit: boolean;
@@ -672,6 +673,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
   const compilationUnits: CompilationUnit[] = [];
   const lineNumberPrograms: LineNumberProgram[] = [];
   let debugStrings: Uint8Array | undefined;
+  let debugRanges: Uint8Array | undefined;
   const abbreviationTables = new Map<number, AbbreviationEntry[]>();
   const elfSymbols: ELFSymbol[] = [];
 
@@ -1558,6 +1560,18 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
     }
   }
 
+  // Parse .debug_ranges section
+  if (sections.has(".debug_ranges")) {
+    const section = sections.get(".debug_ranges");
+    if (section) {
+      debugRanges = new Uint8Array(
+        elfBuffer.buffer,
+        elfBuffer.byteOffset + section.offset,
+        section.size,
+      );
+    }
+  }
+
   // Parse ELF symbol table
   parseELFSymbols();
 
@@ -1566,6 +1580,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
     compilationUnits,
     lineNumberPrograms,
     debugStrings,
+    debugRanges,
     abbreviationTables,
     elfSymbols,
     is64bit,

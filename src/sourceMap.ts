@@ -1,5 +1,12 @@
 import { MemoryType } from "./amigaHunkParser";
 import { normalize } from "path";
+import { DebugInfoEntry } from "./dwarfParser";
+
+export interface ScopeEntry {
+  low: number;
+  high: number;
+  vars: DebugInfoEntry[];
+}
 
 export interface Location {
   path: string;
@@ -32,6 +39,7 @@ export class SourceMap {
     private sources: Set<string>,
     private symbols: Record<string, number>,
     locations: Location[],
+    private scopeTable: ScopeEntry[] = [],
   ) {
     for (const location of locations) {
       // Don't overwrite existing address mappings - first wins
@@ -110,6 +118,31 @@ export class SourceMap {
       (segment) =>
         segment.address <= address && segment.address + segment.size > address,
     );
+  }
+
+  // Returns all variable and parameter DIEs visible at the given loaded address.
+  // Uses a binary search into the pre-built scope table: O(log n + nesting depth).
+  public getLocalsForPc(pc: number): DebugInfoEntry[] {
+    const table = this.scopeTable;
+    if (table.length === 0) return [];
+
+    // Find rightmost entry with low <= pc.
+    let lo = 0, hi = table.length - 1, idx = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1;
+      if (table[mid].low <= pc) { idx = mid; lo = mid + 1; }
+      else { hi = mid - 1; }
+    }
+    if (idx === -1) return [];
+
+    // Scan backward collecting all scopes that contain pc.
+    const result: DebugInfoEntry[] = [];
+    for (let i = idx; i >= 0; i--) {
+      if (table[i].high > pc) {
+        result.push(...table[i].vars);
+      }
+    }
+    return result;
   }
 
   /**

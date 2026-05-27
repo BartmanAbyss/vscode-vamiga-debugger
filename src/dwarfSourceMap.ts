@@ -1,11 +1,14 @@
 import { join, isAbsolute } from "path";
 import {
+  DW_AT, DW_FORM, DW_TAG,
   DWARFData,
+  DebugInfoEntry,
+  CompilationUnit,
   LineNumberState,
   LineNumberInstruction,
   LineNumberProgram,
 } from "./dwarfParser";
-import { SourceMap, Location, Segment } from "./sourceMap";
+import { SourceMap, ScopeEntry, Location, Segment } from "./sourceMap";
 import { MemoryType } from "./amigaHunkParser";
 
 /**
@@ -235,7 +238,148 @@ export function sourceMapFromDwarf(
     }
   }
 
-  return new SourceMap(segments, sources, symbols, locations);
+  const relocate = makeRelocate(dwarfData, sectionOffsets);
+  const scopeTable = buildScopeTable(dwarfData, relocate);
+  return new SourceMap(segments, sources, symbols, locations, scopeTable);
+}
+
+// Returns a function that maps an ELF-space address to its loaded address,
+// or undefined if the address doesn't fall within any loaded section.
+function makeRelocate(
+  dwarfData: DWARFData,
+  sectionOffsets: Array<{ loaded: true; offset: number } | { loaded: false }>,
+): (addr: number) => number | undefined {
+  const sectionList = [...dwarfData.sections.values()];
+  return (addr: number) => {
+    for (let i = 0; i < sectionList.length; i++) {
+      const header = sectionList[i];
+      const so = sectionOffsets[i];
+      if (so?.loaded && addr >= header.addr && addr < header.addr + header.size) {
+        // so.offset = loadedBase - header.addr, so result = loadedBase + (addr - header.addr)
+        return so.offset + addr;
+      }
+    }
+    return undefined;
+  };
+}
+
+// --- Scope table (locals lookup) ---
+
+function findAttribute(die: DebugInfoEntry, name: number) {
+  return die.attributes.find((attr) => attr.name === name);
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number' && !Number.isNaN(value);
+}
+
+function getDieRange(die: DebugInfoEntry): { low: number; high: number } | undefined {
+  const lowAttr = findAttribute(die, DW_AT.low_pc);
+  const highAttr = findAttribute(die, DW_AT.high_pc);
+  if (!lowAttr || !highAttr) return undefined;
+  if (!isNumber(lowAttr.value) || !isNumber(highAttr.value)) return undefined;
+  const low = lowAttr.value;
+  const highValue = highAttr.value;
+  const high = highAttr.form === DW_FORM.addr ? highValue : low + highValue;
+  return { low, high };
+}
+
+interface CuCtx {
+  debugRanges: Uint8Array | undefined;
+  addressSize: number;
+  cuBasePc: number;
+  isLittleEndian: boolean;
+}
+
+function* iterDebugRanges(
+  debugRanges: Uint8Array,
+  rangesOffset: number,
+  cuBasePc: number,
+  addressSize: number,
+  isLittleEndian: boolean,
+): Generator<{ low: number; high: number }> {
+  const view = new DataView(debugRanges.buffer, debugRanges.byteOffset, debugRanges.byteLength);
+  const readAddr = (off: number): number => {
+    if (addressSize === 8) {
+      const lo = view.getUint32(off, isLittleEndian);
+      const hi = view.getUint32(off + 4, isLittleEndian);
+      return isLittleEndian ? lo + hi * 0x100000000 : hi + lo * 0x100000000;
+    }
+    return view.getUint32(off, isLittleEndian);
+  };
+  const baseSentinel = addressSize === 4 ? 0xffffffff : Number.MAX_SAFE_INTEGER;
+  let base = cuBasePc;
+  let offset = rangesOffset;
+  while (offset + addressSize * 2 <= debugRanges.byteLength) {
+    const begin = readAddr(offset);
+    const end = readAddr(offset + addressSize);
+    offset += addressSize * 2;
+    if (begin === 0 && end === 0) break;
+    if (begin >= baseSentinel) { base = end; continue; }
+    yield { low: base + begin, high: base + end };
+  }
+}
+
+function* getDieIntervals(die: DebugInfoEntry, ctx: CuCtx): Generator<{ low: number; high: number }> {
+  const range = getDieRange(die);
+  if (range) { yield range; return; }
+  const rangesAttr = findAttribute(die, DW_AT.ranges);
+  if (rangesAttr && isNumber(rangesAttr.value) && ctx.debugRanges) {
+    yield* iterDebugRanges(ctx.debugRanges, rangesAttr.value, ctx.cuBasePc, ctx.addressSize, ctx.isLittleEndian);
+  }
+}
+
+function getCuBasePc(cu: CompilationUnit): number {
+  for (const die of cu.dies) {
+    const lowAttr = findAttribute(die, DW_AT.low_pc);
+    if (isNumber(lowAttr?.value)) return lowAttr!.value;
+  }
+  return 0;
+}
+
+function buildScopeTable(
+  dwarfData: DWARFData,
+  relocate: (addr: number) => number | undefined,
+): ScopeEntry[] {
+  const entries: ScopeEntry[] = [];
+
+  for (const cu of dwarfData.compilationUnits) {
+    const ctx: CuCtx = {
+      debugRanges: dwarfData.debugRanges,
+      addressSize: cu.addressSize,
+      cuBasePc: getCuBasePc(cu),
+      isLittleEndian: dwarfData.isLittleEndian,
+    };
+
+    function visit(die: DebugInfoEntry, inSubprogram: boolean) {
+      const currentInSubprogram = inSubprogram || die.tag === DW_TAG.subprogram;
+
+      if (currentInSubprogram && (die.tag === DW_TAG.subprogram || die.tag === DW_TAG.lexical_block)) {
+        const vars = die.children.filter(
+          (c) => c.tag === DW_TAG.variable || c.tag === DW_TAG.formal_parameter,
+        );
+        if (vars.length > 0) {
+          for (const interval of getDieIntervals(die, ctx)) {
+            const relocLow = relocate(interval.low);
+            if (relocLow === undefined) continue;
+            const delta = relocLow - interval.low;
+            entries.push({ low: relocLow, high: interval.high + delta, vars });
+          }
+        }
+      }
+
+      for (const child of die.children) {
+        visit(child, currentInSubprogram);
+      }
+    }
+
+    for (const die of cu.dies) {
+      visit(die, false);
+    }
+  }
+
+  entries.sort((a, b) => a.low - b.low);
+  return entries;
 }
 
 function executeLineNumberInstruction(

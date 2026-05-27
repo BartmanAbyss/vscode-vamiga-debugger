@@ -24,11 +24,11 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, READONLY
   4 .debug_aranges 00000028  00000000  00000000  00002066  2**0
                   CONTENTS, RELOC, READONLY, DEBUGGING, OCTETS
-  5 .debug_info   00000159  00000000  00000000  0000208e  2**0
+  5 .debug_info   00000158  00000000  00000000  0000208e  2**0
                   CONTENTS, RELOC, READONLY, DEBUGGING, OCTETS
-  6 .debug_abbrev 00000098  00000000  00000000  000021e7  2**0
+  6 .debug_abbrev 00000098  00000000  00000000  000021e6  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
-  7 .debug_line   00000125  00000000  00000000  0000227f  2**0
+  7 .debug_line   00000124  00000000  00000000  0000227e  2**0
                   CONTENTS, RELOC, READONLY, DEBUGGING, OCTETS
   8 .debug_frame  0000004c  00000000  00000000  000023a4  2**2
                   CONTENTS, RELOC, READONLY, DEBUGGING, OCTETS
@@ -74,29 +74,29 @@ OFFSET   TYPE              VALUE
 RELOCATION RECORDS FOR [.debug_info]:
 OFFSET   TYPE              VALUE
 00000008 R_68K_32          .debug_abbrev
-000000a9 R_68K_32          .debug_rnglists+0x0000000c
-000000b1 R_68K_32          .debug_line
-000000c8 R_68K_32          .data
-000000de R_68K_32          .text
-000000ff R_68K_32          .text+0x00000018
-0000011a R_68K_32          .text+0x0000002c
-00000140 R_68K_32          .text+0x00000044
+000000a8 R_68K_32          .debug_rnglists+0x0000000c
+000000b0 R_68K_32          .debug_line
+000000c7 R_68K_32          .data
+000000dd R_68K_32          .text
+000000fe R_68K_32          .text+0x00000018
+00000119 R_68K_32          .text+0x0000002c
+0000013f R_68K_32          .text+0x00000044
 
 
 RELOCATION RECORDS FOR [.debug_line]:
 OFFSET   TYPE              VALUE
-000000b0 R_68K_32          .text
-000000ba R_68K_32          .text+0x00000004
-000000c4 R_68K_32          .text+0x0000000c
-000000ce R_68K_32          .text+0x00000018
-000000d8 R_68K_32          .text+0x00000020
-000000e2 R_68K_32          .text+0x0000002c
-000000ec R_68K_32          .text+0x00000034
-000000f6 R_68K_32          .text+0x00000040
-00000100 R_68K_32          .text+0x00000042
-0000010a R_68K_32          .text+0x00000044
-00000114 R_68K_32          .text+0x00000048
-0000011e R_68K_32          .text+0x0000004e
+000000af R_68K_32          .text
+000000b9 R_68K_32          .text+0x00000004
+000000c3 R_68K_32          .text+0x0000000c
+000000cd R_68K_32          .text+0x00000018
+000000d7 R_68K_32          .text+0x00000020
+000000e1 R_68K_32          .text+0x0000002c
+000000eb R_68K_32          .text+0x00000034
+000000f5 R_68K_32          .text+0x00000040
+000000ff R_68K_32          .text+0x00000042
+00000109 R_68K_32          .text+0x00000044
+00000113 R_68K_32          .text+0x00000048
+0000011d R_68K_32          .text+0x0000004e
 
 
 RELOCATION RECORDS FOR [.debug_frame]:
