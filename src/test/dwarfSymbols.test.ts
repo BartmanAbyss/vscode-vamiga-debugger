@@ -21,7 +21,7 @@ function isSectionIncluded(header: ELFSectionHeader): boolean {
 
 describe('dwarfSymbols', () => {
   it('should return variable DIEs for a PC inside a function range', () => {
-    const testFile = path.join(__dirname, 'fixtures/amigaPrograms', 'simple_c.elf');
+    const testFile = path.join(__dirname, 'fixtures/amigaPrograms', 'simple_c/simple_c.elf');
     const buffer = readFileSync(testFile);
     const dwarf = parseDwarf(buffer);
 
@@ -31,7 +31,7 @@ describe('dwarfSymbols', () => {
 
     const mainCPaths = sourceMap.getSourceFiles().filter(s => s.includes('simple_c.c'));
     expect(mainCPaths.length).toBeGreaterThan(0);
-    
+
     const location = sourceMap.lookupSourceLine(mainCPaths[0], 14);
     expect(location).toBeDefined();
 
@@ -45,7 +45,7 @@ describe('dwarfSymbols', () => {
   });
 
   it('should include formal parameters for a PC inside the function', () => {
-    const testFile = path.join(__dirname, 'fixtures/amigaPrograms', 'simple_c.elf');
+    const testFile = path.join(__dirname, 'fixtures/amigaPrograms', 'simple_c/simple_c.elf');
     const buffer = readFileSync(testFile);
     const dwarf = parseDwarf(buffer);
 
