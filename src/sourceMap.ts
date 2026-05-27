@@ -1,5 +1,12 @@
 import { MemoryType } from "./amigaHunkParser";
 import { normalize } from "path";
+import { DebugInfoEntry } from "./dwarfParser";
+
+export interface ScopeEntry {
+  low: number;
+  high: number;
+  vars: DebugInfoEntry[];
+}
 
 export type LocalLocation =
   | { kind: 'fbreg';  offset: number }

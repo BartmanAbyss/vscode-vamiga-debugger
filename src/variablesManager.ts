@@ -57,6 +57,7 @@ export class VariablesManager {
       new Scope("Custom Registers", this.variableHandles.create("custom"), false),
       new Scope("Vectors", this.variableHandles.create("vectors"), false),
       new Scope("Symbols", this.variableHandles.create("symbols"), false),
+      new Scope("Locals", this.variableHandles.create("locals"), false),
       new Scope("Segments", this.variableHandles.create("segments"), false),
     ];
   }
