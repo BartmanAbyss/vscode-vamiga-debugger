@@ -1,17 +1,12 @@
 import { MemoryType } from "./amigaHunkParser";
 import { normalize } from "path";
-import { DebugInfoEntry } from "./dwarfParser";
-
-export interface ScopeEntry {
-  low: number;
-  high: number;
-  vars: DebugInfoEntry[];
-}
+import { DebugFrame, evaluateCfaAtPc } from "./dwarfParser";
 
 export type LocalLocation =
   | { kind: 'fbreg';  offset: number }
   | { kind: 'breg';   reg: number; offset: number }
   | { kind: 'addr';   address: number }
+  | { kind: 'cfa';    offset: number }
   | { kind: 'unknown' };
 
 export interface LocalVariable {
@@ -59,6 +54,7 @@ export class SourceMap {
     private symbols: Record<string, number>,
     locations: Location[],
     private scopeTable: ScopeEntry[] = [],
+    private debugFrame?: DebugFrame,
   ) {
     for (const location of locations) {
       // Don't overwrite existing address mappings - first wins
@@ -141,6 +137,11 @@ export class SourceMap {
 
   // Returns all locals visible at the given loaded address.
   // Uses a binary search into the pre-built scope table: O(log n + nesting depth).
+  public getCfaForPc(pc: number): { reg: number; offset: number } | undefined {
+    if (!this.debugFrame) return undefined;
+    return evaluateCfaAtPc(pc, this.debugFrame);
+  }
+
   public getLocalsForPc(pc: number): LocalVariable[] {
     const table = this.scopeTable;
     if (table.length === 0) return [];

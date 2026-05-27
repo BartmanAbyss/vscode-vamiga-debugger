@@ -365,6 +365,12 @@ export class VariablesManager {
         return Number(cpuInfo[regName as keyof CpuInfo]) + location.offset;
       }
       case 'addr': return location.address;
+      case 'cfa': {
+        const cfa = this.sourceMap.getCfaForPc(Number(cpuInfo.pc));
+        if (!cfa) return undefined;
+        const regName = cfa.reg < 8 ? `d${cfa.reg}` : `a${cfa.reg - 8}`;
+        return Number(cpuInfo[regName as keyof CpuInfo]) + cfa.offset + location.offset;
+      }
       default: return undefined;
     }
   }

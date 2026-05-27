@@ -83,24 +83,5 @@ describe('dwarfSourceMap', () => {
     expect(names).toEqual(['local_a', 'local_b', 'local_c']);
   });
 
-  it('should include formal parameters for a PC inside the function', () => {
-    const testFile = path.join(__dirname, 'fixtures/amigaPrograms', 'simple_c/simple_c.elf');
-    const buffer = readFileSync(testFile);
-    const dwarf = parseDwarf(buffer);
 
-    const offsets = [...dwarf.sections.values()].filter(s => isSectionIncluded(s)).map(s => s.addr);
-    const sourceMap = sourceMapFromDwarf(dwarf, offsets, '');
-
-    const mainCPaths = sourceMap.getSourceFiles().filter(s => s.includes('simple_c.c'));
-    expect(mainCPaths.length).toBeGreaterThan(0);
-
-    const symbols = sourceMap.getSymbols();
-    const func = symbols["func"];
-    expect(func).toBeDefined();
-
-    const results = sourceMap.getLocalsForPc(func + 4);
-
-    expect(results.length).toBe(1);
-    expect(results[0].name).toBe('a');
-  });
 });

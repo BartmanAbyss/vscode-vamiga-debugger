@@ -134,12 +134,48 @@ export interface SourceMapEntry {
   isStatement: boolean;
 }
 
+export interface CfaInstruction {
+  op: string;
+  reg?: number;
+  reg2?: number;
+  offset?: number;
+  factoredOffset?: number;
+  delta?: number;
+  address?: number;
+}
+
+export interface DebugFrameCIE {
+  offset: number;
+  version: number;
+  augmentation: string;
+  codeAlignFactor: number;
+  dataAlignFactor: number;
+  returnAddressColumn: number;
+  addressSize: number;
+  initialInstructions: CfaInstruction[];
+}
+
+export interface DebugFrameFDE {
+  offset: number;
+  cieOffset: number;
+  cie: DebugFrameCIE;
+  pcStart: number;
+  pcRange: number;
+  instructions: CfaInstruction[];
+}
+
+export interface DebugFrame {
+  cies: Map<number, DebugFrameCIE>;
+  fdes: DebugFrameFDE[];
+}
+
 export interface DWARFData {
   sections: Map<string, ELFSectionHeader>;
   compilationUnits: CompilationUnit[];
   lineNumberPrograms: LineNumberProgram[];
   debugStrings: Uint8Array | undefined;
   debugRanges: Uint8Array | undefined;
+  debugFrame: DebugFrame | undefined;
   abbreviationTables: Map<number, AbbreviationEntry[]>;
   elfSymbols: ELFSymbol[];
   is64bit: boolean;
@@ -674,6 +710,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
   const lineNumberPrograms: LineNumberProgram[] = [];
   let debugStrings: Uint8Array | undefined;
   let debugRanges: Uint8Array | undefined;
+  let debugFrame: DebugFrame | undefined;
   const abbreviationTables = new Map<number, AbbreviationEntry[]>();
   const elfSymbols: ELFSymbol[] = [];
 
@@ -1518,6 +1555,125 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
     }
   }
 
+  function parseCfaInstructions(startOffset: number, endOffset: number, addressSize: number): CfaInstruction[] {
+    const instructions: CfaInstruction[] = [];
+    let offset = startOffset;
+    while (offset < endOffset) {
+      const byte = readUInt8(offset++);
+      const high2 = (byte & 0xc0) >> 6;
+      const low6  = byte & 0x3f;
+      if (high2 === 1) {
+        instructions.push({ op: 'DW_CFA_advance_loc', delta: low6 });
+      } else if (high2 === 2) {
+        const f = readULEB128(offset); offset += f.size;
+        instructions.push({ op: 'DW_CFA_offset', reg: low6, factoredOffset: f.value });
+      } else if (high2 === 3) {
+        instructions.push({ op: 'DW_CFA_restore', reg: low6 });
+      } else {
+        switch (byte) {
+          case 0x00: instructions.push({ op: 'DW_CFA_nop' }); break;
+          case 0x01: { const a = addressSize === 8 ? readUInt64(offset) : readUInt32(offset); offset += addressSize; instructions.push({ op: 'DW_CFA_set_loc', address: a }); break; }
+          case 0x02: { instructions.push({ op: 'DW_CFA_advance_loc1', delta: readUInt8(offset) }); offset += 1; break; }
+          case 0x03: { instructions.push({ op: 'DW_CFA_advance_loc2', delta: readUInt16(offset) }); offset += 2; break; }
+          case 0x04: { instructions.push({ op: 'DW_CFA_advance_loc4', delta: readUInt32(offset) }); offset += 4; break; }
+          case 0x05: { const r = readULEB128(offset); offset += r.size; const f = readULEB128(offset); offset += f.size; instructions.push({ op: 'DW_CFA_offset_extended', reg: r.value, factoredOffset: f.value }); break; }
+          case 0x06: { const r = readULEB128(offset); offset += r.size; instructions.push({ op: 'DW_CFA_restore_extended', reg: r.value }); break; }
+          case 0x07: { const r = readULEB128(offset); offset += r.size; instructions.push({ op: 'DW_CFA_undefined', reg: r.value }); break; }
+          case 0x08: { const r = readULEB128(offset); offset += r.size; instructions.push({ op: 'DW_CFA_same_value', reg: r.value }); break; }
+          case 0x09: { const r1 = readULEB128(offset); offset += r1.size; const r2 = readULEB128(offset); offset += r2.size; instructions.push({ op: 'DW_CFA_register', reg: r1.value, reg2: r2.value }); break; }
+          case 0x0a: instructions.push({ op: 'DW_CFA_remember_state' }); break;
+          case 0x0b: instructions.push({ op: 'DW_CFA_restore_state' }); break;
+          case 0x0c: { const r = readULEB128(offset); offset += r.size; const o = readULEB128(offset); offset += o.size; instructions.push({ op: 'DW_CFA_def_cfa', reg: r.value, offset: o.value }); break; }
+          case 0x0d: { const r = readULEB128(offset); offset += r.size; instructions.push({ op: 'DW_CFA_def_cfa_register', reg: r.value }); break; }
+          case 0x0e: { const o = readULEB128(offset); offset += o.size; instructions.push({ op: 'DW_CFA_def_cfa_offset', offset: o.value }); break; }
+          case 0x0f: { const len = readULEB128(offset); offset += len.size + len.value; instructions.push({ op: 'DW_CFA_def_cfa_expression' }); break; }
+          case 0x10: { const r = readULEB128(offset); offset += r.size; const len = readULEB128(offset); offset += len.size + len.value; instructions.push({ op: 'DW_CFA_expression', reg: r.value }); break; }
+          case 0x11: { const r = readULEB128(offset); offset += r.size; const o = readSLEB128(offset); offset += o.size; instructions.push({ op: 'DW_CFA_offset_extended_sf', reg: r.value, factoredOffset: o.value }); break; }
+          case 0x12: { const r = readULEB128(offset); offset += r.size; const o = readSLEB128(offset); offset += o.size; instructions.push({ op: 'DW_CFA_def_cfa_sf', reg: r.value, factoredOffset: o.value }); break; }
+          case 0x13: { const o = readSLEB128(offset); offset += o.size; instructions.push({ op: 'DW_CFA_def_cfa_offset_sf', factoredOffset: o.value }); break; }
+          default: instructions.push({ op: `DW_CFA_unknown_0x${byte.toString(16)}` }); break;
+        }
+      }
+    }
+    return instructions;
+  }
+
+  function parseDebugFrameSection(section: ELFSectionHeader): DebugFrame {
+    const cies = new Map<number, DebugFrameCIE>();
+    const fdes: DebugFrameFDE[] = [];
+    const sectionStart = section.offset;
+    const sectionEnd   = section.offset + section.size;
+    const defaultAddrSize = is64bit ? 8 : 4;
+    let offset = sectionStart;
+
+    while (offset + 8 <= sectionEnd) {
+      const entryStart = offset;
+      const length = readUInt32(offset); offset += 4;
+      if (length === 0) break;
+      if (length === 0xffffffff) {
+        // DWARF64 — skip
+        const extLen = readUInt64(offset); offset += 8 + extLen;
+        continue;
+      }
+      const entryEnd = offset + length; // absolute file offset of end
+      const cieId = readUInt32(offset); offset += 4;
+
+      if (cieId === 0xffffffff) {
+        // CIE
+        const cieOffset = entryStart - sectionStart;
+        const version = readUInt8(offset++);
+        const aug = readString(offset); const augmentation = aug.value; offset += aug.size;
+
+        let addrSize = defaultAddrSize;
+        let segSelectorSize = 0;
+        if (version >= 4) { addrSize = readUInt8(offset++); segSelectorSize = readUInt8(offset++); }
+        void segSelectorSize;
+
+        const codeAlign = readULEB128(offset); offset += codeAlign.size;
+        const dataAlign = readSLEB128(offset); offset += dataAlign.size;
+        let returnAddressColumn: number;
+        if (version === 1) { returnAddressColumn = readUInt8(offset++); }
+        else { const rac = readULEB128(offset); offset += rac.size; returnAddressColumn = rac.value; }
+
+        // If augmentation starts with 'z', skip the augmentation data block
+        if (augmentation.startsWith('z')) {
+          const augLen = readULEB128(offset); offset += augLen.size + augLen.value;
+        }
+
+        const cie: DebugFrameCIE = {
+          offset: cieOffset,
+          version,
+          augmentation,
+          codeAlignFactor: codeAlign.value,
+          dataAlignFactor: dataAlign.value,
+          returnAddressColumn,
+          addressSize: addrSize,
+          initialInstructions: parseCfaInstructions(offset, entryEnd, addrSize),
+        };
+        cies.set(cieOffset, cie);
+      } else {
+        // FDE
+        const cieOffset = cieId; // section-relative for .debug_frame
+        const cie = cies.get(cieOffset);
+        if (!cie) { offset = entryEnd; continue; }
+
+        const pcStart = cie.addressSize === 8 ? readUInt64(offset) : readUInt32(offset); offset += cie.addressSize;
+        const pcRange = cie.addressSize === 8 ? readUInt64(offset) : readUInt32(offset); offset += cie.addressSize;
+
+        fdes.push({
+          offset: entryStart - sectionStart,
+          cieOffset,
+          cie,
+          pcStart,
+          pcRange,
+          instructions: parseCfaInstructions(offset, entryEnd, cie.addressSize),
+        });
+      }
+      offset = entryEnd;
+    }
+    return { cies, fdes };
+  }
+
   // Parse .debug_info section
   if (sections.has(".debug_info")) {
     const section = sections.get(".debug_info");
@@ -1572,6 +1728,14 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
     }
   }
 
+  // Parse .debug_frame section
+  if (sections.has(".debug_frame")) {
+    const section = sections.get(".debug_frame");
+    if (section) {
+      debugFrame = parseDebugFrameSection(section);
+    }
+  }
+
   // Parse ELF symbol table
   parseELFSymbols();
 
@@ -1581,6 +1745,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
     lineNumberPrograms,
     debugStrings,
     debugRanges,
+    debugFrame,
     abbreviationTables,
     elfSymbols,
     is64bit,
@@ -1612,6 +1777,62 @@ export function resolveReference(
   }
 
   return undefined;
+}
+
+/**
+ * Evaluate the CFA (Canonical Frame Address) rule active at the given PC.
+ * Runs the CIE initial instructions followed by the matching FDE's instructions,
+ * stopping when the location counter would advance past `pc`.
+ *
+ * Returns `{ reg, offset }` where CFA = register[reg] + offset, or `undefined`
+ * if no FDE covers the given PC.
+ */
+export function evaluateCfaAtPc(
+  pc: number,
+  debugFrame: DebugFrame,
+): { reg: number; offset: number } | undefined {
+  const fde = debugFrame.fdes.find(f => pc >= f.pcStart && pc < f.pcStart + f.pcRange);
+  if (!fde) return undefined;
+
+  const { codeAlignFactor, dataAlignFactor } = fde.cie;
+
+  let loc = 0;
+  let cfaReg = 0;
+  let cfaOffset = 0;
+
+  function apply(instructions: CfaInstruction[], stopAt?: number): boolean {
+    for (const instr of instructions) {
+      switch (instr.op) {
+        case 'DW_CFA_advance_loc':
+        case 'DW_CFA_advance_loc1':
+        case 'DW_CFA_advance_loc2':
+        case 'DW_CFA_advance_loc4': {
+          const newLoc = loc + (instr.delta ?? 0) * codeAlignFactor;
+          if (stopAt !== undefined && newLoc > stopAt) return true;
+          loc = newLoc;
+          break;
+        }
+        case 'DW_CFA_set_loc': {
+          const newLoc = instr.address ?? 0;
+          if (stopAt !== undefined && newLoc > stopAt) return true;
+          loc = newLoc;
+          break;
+        }
+        case 'DW_CFA_def_cfa':          cfaReg = instr.reg ?? cfaReg; cfaOffset = instr.offset ?? 0; break;
+        case 'DW_CFA_def_cfa_register': cfaReg = instr.reg ?? cfaReg; break;
+        case 'DW_CFA_def_cfa_offset':   cfaOffset = instr.offset ?? 0; break;
+        case 'DW_CFA_def_cfa_sf':       cfaReg = instr.reg ?? cfaReg; cfaOffset = (instr.factoredOffset ?? 0) * dataAlignFactor; break;
+        case 'DW_CFA_def_cfa_offset_sf': cfaOffset = (instr.factoredOffset ?? 0) * dataAlignFactor; break;
+      }
+    }
+    return false;
+  }
+
+  apply(fde.cie.initialInstructions);
+  loc = fde.pcStart;
+  apply(fde.instructions, pc);
+
+  return { reg: cfaReg, offset: cfaOffset };
 }
 
 export function formatSectionFlags(flags: ELFSectionFlags): string {
