@@ -12,15 +12,21 @@ Disassembly of section .text:
 
 8000007e <_start>:
 8000007e:	4e55 fff4      	link.w a5,#-12
-80000082:	2f2d fffc      	move.l -4(a5),-(sp)
-80000086:	4eba ffec      	jsr 80000074 <func>(pc)
-8000008a:	588f           	addq.l #4,sp
-8000008c:	2f2d fff8      	move.l -8(a5),-(sp)
-80000090:	4eba ffe2      	jsr 80000074 <func>(pc)
-80000094:	588f           	addq.l #4,sp
-80000096:	2f2d fff4      	move.l -12(a5),-(sp)
-8000009a:	4eba ffd8      	jsr 80000074 <func>(pc)
-8000009e:	588f           	addq.l #4,sp
-800000a0:	4e71           	nop
-800000a2:	4e5d           	unlk a5
-800000a4:	4e75           	rts
+80000082:	2b7c 2222 2222 	move.l #572662306,-4(a5)
+80000088:	fffc 
+8000008a:	2f2d fffc      	move.l -4(a5),-(sp)
+8000008e:	4eba ffe4      	jsr 80000074 <func>(pc)
+80000092:	588f           	addq.l #4,sp
+80000094:	2b7c 3333 3333 	move.l #858993459,-8(a5)
+8000009a:	fff8 
+8000009c:	2f2d fff8      	move.l -8(a5),-(sp)
+800000a0:	4eba ffd2      	jsr 80000074 <func>(pc)
+800000a4:	588f           	addq.l #4,sp
+800000a6:	2b7c 4444 4444 	move.l #1145324612,-12(a5)
+800000ac:	fff4 
+800000ae:	2f2d fff4      	move.l -12(a5),-(sp)
+800000b2:	4eba ffc0      	jsr 80000074 <func>(pc)
+800000b6:	588f           	addq.l #4,sp
+800000b8:	4e71           	nop
+800000ba:	4e5d           	unlk a5
+800000bc:	4e75           	rts
