@@ -1,6 +1,6 @@
 int global_a = 0x11111111;
 
-void func(int a) {
+__attribute__((always_inline)) inline void func(int a) {
 }
 
 __attribute__((used)) __attribute__((section(".text.unlikely"))) void _start() {

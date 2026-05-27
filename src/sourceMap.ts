@@ -2,6 +2,19 @@ import { MemoryType } from "./amigaHunkParser";
 import { normalize } from "path";
 import { DebugFrame, evaluateCfaAtPc } from "./dwarfParser";
 
+export interface InlineFrame {
+  name: string;
+  callPath: string;
+  callLine: number;
+}
+
+export interface InlineEntry {
+  low: number;
+  high: number;
+  depth: number;
+  frame: InlineFrame;
+}
+
 export type LocalLocation =
   | { kind: 'fbreg';  offset: number }
   | { kind: 'breg';   reg: number; offset: number }
@@ -55,6 +68,7 @@ export class SourceMap {
     locations: Location[],
     private scopeTable: ScopeEntry[] = [],
     private debugFrame?: DebugFrame,
+    private inlineTable: InlineEntry[] = [],
   ) {
     for (const location of locations) {
       // Don't overwrite existing address mappings - first wins
@@ -140,6 +154,14 @@ export class SourceMap {
   public getCfaForPc(pc: number): { reg: number; offset: number } | undefined {
     if (!this.debugFrame) return undefined;
     return evaluateCfaAtPc(pc, this.debugFrame);
+  }
+
+  // Returns inline frames for the given PC, ordered innermost-first (deepest nesting first).
+  public getInlineFramesForPc(pc: number): InlineFrame[] {
+    return this.inlineTable
+      .filter(e => e.low <= pc && pc < e.high)
+      .sort((a, b) => b.depth - a.depth)
+      .map(e => e.frame);
   }
 
   public getLocalsForPc(pc: number): LocalVariable[] {

@@ -64,6 +64,7 @@ export interface FileEntry {
 }
 
 export interface LineNumberProgram {
+  sectionOffset: number;
   totalLength: number;
   version: number;
   headerLength: number;
@@ -1012,7 +1013,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
       // encoded in the DIE is an offset relative to the start of the
       // compilation unit; expose it as `{ ref: absoluteOffset }` so callers
       // can later locate the referenced DIE.
-      if (attr.name === DW_AT.type && typeof attr.value === 'number') {
+      if ((attr.name === DW_AT.type || attr.name === DW_AT.abstract_origin) && typeof attr.value === 'number') {
         const rel = attr.value as number;
         const absolute = cuStartOffset + rel;
         attr.value = { ref: absolute };
@@ -1453,6 +1454,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
     }
 
     const program: LineNumberProgram = {
+      sectionOffset: 0, // set by caller after section base is known
       totalLength: unitLength,
       version,
       headerLength,
@@ -1698,6 +1700,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
 
       while (offset < endOffset) {
         const program = parseLineNumberProgram(offset);
+        program.sectionOffset = offset - section.offset;
         lineNumberPrograms.push(program);
         offset += program.totalLength + (is64bit ? 12 : 4);
       }

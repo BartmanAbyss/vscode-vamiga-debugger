@@ -5,24 +5,17 @@ simple_c.elf:     file format elf32-m68k
 Disassembly of section .text:
 
 00000000 <_start>:
-   0:	4fef fff4      	lea -12(sp),sp
-   4:	2f7c 2222 2222 	move.l #572662306,8(sp)
-   a:	0008 
-   c:	2f2f 0008      	move.l 8(sp),-(sp)
-  10:	4eb9 0000 0040 	jsr 40 <func>
-  16:	588f           	addq.l #4,sp
-  18:	2f7c 3333 3333 	move.l #858993459,4(sp)
-  1e:	0004 
-  20:	2f2f 0004      	move.l 4(sp),-(sp)
-  24:	4eb9 0000 0040 	jsr 40 <func>
-  2a:	588f           	addq.l #4,sp
-  2c:	2ebc 4444 4444 	move.l #1145324612,(sp)
-  32:	2f17           	move.l (sp),-(sp)
-  34:	4eb9 0000 0040 	jsr 40 <func>
-  3a:	588f           	addq.l #4,sp
-  3c:	60fe           	bra.s 3c <_start+0x3c>
-  3e:	4e71           	nop
-
-00000040 <func>:
-  40:	4e71           	nop
-  42:	4e75           	rts
+   0:	4fef ffe8      	lea -24(sp),sp
+   4:	2f7c 2222 2222 	move.l #572662306,20(sp)
+   a:	0014 
+   c:	2eaf 0014      	move.l 20(sp),(sp)
+  10:	4e71           	nop
+  12:	2f7c 3333 3333 	move.l #858993459,16(sp)
+  18:	0010 
+  1a:	2f6f 0010 0004 	move.l 16(sp),4(sp)
+  20:	4e71           	nop
+  22:	2f7c 4444 4444 	move.l #1145324612,12(sp)
+  28:	000c 
+  2a:	2f6f 000c 0008 	move.l 12(sp),8(sp)
+  30:	4e71           	nop
+  32:	60fe           	bra.s 32 <_start+0x32>

@@ -62,35 +62,53 @@ export class StackManager {
 
     let foundSource = false;
 
-    // Now build stack frame response from addresses
-    const stk: StackFrame[] = [];
-    for (let i = startFrame; i < addresses.length && i < endFrame; i++) {
-      const addr = addresses[i][0];
-      if (this.sourceMap) {
-        const loc = this.sourceMap.lookupAddress(addr);
-        if (loc) {
-          const frame = new StackFrame(
-            i, // Use the frame index as ID
-            formatAddress(addr, this.sourceMap),
-            new Source(basename(loc.path), loc.path),
-            loc.line,
-          );
-          frame.instructionPointerReference = formatHex(addr);
-          stk.push(frame);
-          foundSource = true;
-          continue;
-        }
+    // Build the full ordered frame list (inline synthetic frames + real frames),
+    // then slice for pagination. frameId is a running counter across all entries.
+    const allFrames: StackFrame[] = [];
+    let frameId = 0;
+
+    outer: for (const [addr] of addresses) {
+      const inlines = this.sourceMap?.getInlineFramesForPc?.(addr) ?? [];
+
+      // Synthetic inline frames — innermost (deepest nesting) first.
+      // Frame k shows the kth inline function; its source location is either the
+      // raw PC location (k=0) or the call site of the previous inline (k>0).
+      for (let k = 0; k < inlines.length; k++) {
+        const inlineLoc = k === 0
+          ? this.sourceMap?.lookupAddress(addr)
+          : { path: inlines[k - 1].callPath, line: inlines[k - 1].callLine };
+        const inlineName = `${inlines[k].name} (inline)`;
+        const f = inlineLoc
+          ? new StackFrame(frameId, inlineName, new Source(basename(inlineLoc.path), inlineLoc.path), inlineLoc.line)
+          : new StackFrame(frameId, inlineName);
+        f.instructionPointerReference = formatHex(addr);
+        allFrames.push(f);
+        frameId++;
+        foundSource = foundSource || inlineLoc !== undefined;
       }
-      // stop on first rom call after user code
-      if (foundSource && addr > 0x00e00000 && addr < 0x01000000) {
-        break;
+
+      // Real frame. If there are inlines, override its location with the outermost
+      // inline's call site (where that inline was invoked in this function).
+      const realLoc = inlines.length > 0
+        ? { path: inlines[inlines.length - 1].callPath, line: inlines[inlines.length - 1].callLine }
+        : this.sourceMap?.lookupAddress(addr);
+
+      if (realLoc) {
+        const f = new StackFrame(frameId, formatAddress(addr, this.sourceMap), new Source(basename(realLoc.path), realLoc.path), realLoc.line);
+        f.instructionPointerReference = formatHex(addr);
+        allFrames.push(f);
+        frameId++;
+        foundSource = true;
+      } else {
+        if (foundSource && addr > 0x00e00000 && addr < 0x01000000) break outer;
+        const f = new StackFrame(frameId, formatHex(addr));
+        f.instructionPointerReference = formatHex(addr);
+        allFrames.push(f);
+        frameId++;
       }
-      // No source available - create disassembly frame
-      const frame = new StackFrame(i, formatHex(addr)); // Use frame index as ID, no source/line
-      frame.instructionPointerReference = formatHex(addr);
-      stk.push(frame);
     }
-    return stk;
+
+    return allFrames.slice(startFrame, endFrame);
   }
 
   private cpuInfoToRegs(cpuInfo: CpuInfo): Map<number, number> {

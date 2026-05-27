@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { describe, it, beforeEach, afterEach } from '@jest/globals';
 import * as assert from "assert";
 import * as sinon from "sinon";
 import { StackManager } from "../stackManager";
@@ -57,6 +58,7 @@ describe("StackManager - Comprehensive Tests", () => {
       lookupSourceLine: sinon.stub(),
       findSymbolOffset: sinon.stub(),
       getCfaForPc: sinon.stub().returns(undefined), // no DWARF frame info → use guessStack
+      getInlineFramesForPc: sinon.stub().returns([]), // no inline frames by default
     };
 
     stackManager = new StackManager(mockVAmiga, mockSourceMap);
@@ -419,6 +421,31 @@ describe("StackManager - Comprehensive Tests", () => {
       assert.strictEqual(frames.length, 2);
       assert.strictEqual(frames[0].instructionPointerReference, "0x00001000");
       assert.strictEqual(frames[1].instructionPointerReference, "0x00002000");
+    });
+
+    it("should insert synthetic inline frames before the real frame", async () => {
+      const mockCpuInfo = createMockCpuInfo({ pc: "0x1000", a7: "0x8000" });
+      mockVAmiga.getCpuInfo.resolves(mockCpuInfo);
+      sinon.stub(stackManager, "guessStack").resolves([[0x1000, 0x1000]]);
+
+      // Real frame has a source location
+      mockSourceMap.lookupAddress.withArgs(0x1000).returns({ path: "/src/outer.c", line: 10 });
+      // One inline function wraps the code at 0x1000, called from line 20
+      mockSourceMap.getInlineFramesForPc.withArgs(0x1000).returns([
+        { name: "inline_func", callPath: "/src/outer.c", callLine: 20 },
+      ]);
+
+      const frames = await stackManager.getStackFrames(0, 10);
+
+      // Two frames: synthetic inline (innermost) + real outer
+      assert.strictEqual(frames.length, 2);
+      // Inline frame: name = function name, location = raw PC location (lookupAddress)
+      assert.strictEqual(frames[0].name, "inline_func (inline)");
+      assert.strictEqual(frames[0].line, 10);
+      assert.strictEqual(frames[0].instructionPointerReference, "0x00001000");
+      // Real frame: location overridden to call site
+      assert.strictEqual(frames[1].line, 20);
+      assert.strictEqual(frames[1].instructionPointerReference, "0x00001000");
     });
 
     it("should fall back to guessStack when getCfaForPc returns undefined for current PC", async () => {

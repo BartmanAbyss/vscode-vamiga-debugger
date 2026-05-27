@@ -8,7 +8,7 @@ import {
   LineNumberInstruction,
   LineNumberProgram,
 } from "./dwarfParser";
-import { SourceMap, ScopeEntry, LocalVariable, LocalLocation, Location, Segment } from "./sourceMap";
+import { SourceMap, ScopeEntry, LocalVariable, LocalLocation, Location, Segment, InlineFrame, InlineEntry } from "./sourceMap";
 import { DebugFrame } from "./dwarfParser";
 import { MemoryType } from "./amigaHunkParser";
 
@@ -244,7 +244,8 @@ export function sourceMapFromDwarf(
   const relocatedDebugFrame = dwarfData.debugFrame
     ? relocateDebugFrame(dwarfData.debugFrame, relocate)
     : undefined;
-  return new SourceMap(segments, sources, symbols, locations, scopeTable, relocatedDebugFrame);
+  const inlineTable = buildInlineTable(dwarfData, relocate, baseDir);
+  return new SourceMap(segments, sources, symbols, locations, scopeTable, relocatedDebugFrame, inlineTable);
 }
 
 function relocateDebugFrame(
@@ -488,6 +489,70 @@ function buildScopeTable(
   }
 
   entries.sort((a, b) => a.low - b.low);
+  return entries;
+}
+
+function buildInlineTable(
+  dwarfData: DWARFData,
+  relocate: (addr: number) => number | undefined,
+  baseDir: string,
+): InlineEntry[] {
+  const entries: InlineEntry[] = [];
+
+  for (const cu of dwarfData.compilationUnits) {
+    const stmtListAttr = findAttribute(cu.dies[0], DW_AT.stmt_list);
+    const stmtList = isNumber(stmtListAttr?.value) ? stmtListAttr.value : undefined;
+    const program = stmtList !== undefined
+      ? dwarfData.lineNumberPrograms.find(p => p.sectionOffset === stmtList)
+      : dwarfData.lineNumberPrograms[0];
+
+    const ctx: CuCtx = {
+      debugRanges: dwarfData.debugRanges,
+      addressSize: cu.addressSize,
+      cuBasePc: getCuBasePc(cu),
+      isLittleEndian: dwarfData.isLittleEndian,
+    };
+
+    function resolveCallPath(callFile: number): string {
+      if (!program) return '';
+      const fileIndex = program.version >= 5 ? callFile : callFile - 1;
+      const fileEntry = program.fileNames[fileIndex];
+      if (!fileEntry) return '';
+      let filePath = fileEntry.name;
+      const dirIndex = program.version >= 5
+        ? fileEntry.directoryIndex
+        : fileEntry.directoryIndex > 0 ? fileEntry.directoryIndex - 1 : -1;
+      if (dirIndex >= 0 && dirIndex < program.includeDirectories.length) {
+        filePath = join(program.includeDirectories[dirIndex], filePath);
+      }
+      if (!isAbsolute(filePath)) filePath = join(baseDir, filePath);
+      return filePath;
+    }
+
+    function visit(die: DebugInfoEntry, depth: number) {
+      if (die.tag === DW_TAG.inlined_subroutine) {
+        const originDie = findAttribute(die, DW_AT.abstract_origin)?.value?.die as DebugInfoEntry | undefined;
+        const name = (originDie ? findAttribute(originDie, DW_AT.name)?.value as string | undefined : undefined) ?? '???';
+        const callFile = findAttribute(die, DW_AT.call_file)?.value as number | undefined ?? 0;
+        const callLine = findAttribute(die, DW_AT.call_line)?.value as number | undefined ?? 0;
+        const callPath = resolveCallPath(callFile);
+
+        for (const interval of getDieIntervals(die, ctx)) {
+          const relocLow = relocate(interval.low);
+          if (relocLow === undefined) continue;
+          const delta = relocLow - interval.low;
+          entries.push({ low: relocLow, high: interval.high + delta, depth, frame: { name, callPath, callLine } as InlineFrame });
+        }
+
+        for (const child of die.children) visit(child, depth + 1);
+      } else {
+        for (const child of die.children) visit(child, depth);
+      }
+    }
+
+    for (const die of cu.dies) visit(die, 0);
+  }
+
   return entries;
 }
 
