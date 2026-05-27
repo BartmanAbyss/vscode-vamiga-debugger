@@ -1,5 +1,5 @@
 import { Source, StackFrame } from "@vscode/debugadapter";
-import { VAmiga } from "./vAmiga";
+import { VAmiga, CpuInfo } from "./vAmiga";
 import { formatAddress, formatHex } from "./numbers";
 import { basename } from "path";
 import { SourceMap } from "./sourceMap";
@@ -55,7 +55,10 @@ export class StackManager {
       }
     }
 
-    const addresses = await this.guessStack(pc, stackAddress, endFrame);
+    const dwCfa = this.sourceMap?.getCfaForPc?.(pc);
+    const addresses = dwCfa !== undefined
+      ? await this.dwarfUnwindStack(pc, stackAddress, cpuInfo, endFrame)
+      : await this.guessStack(pc, stackAddress, endFrame);
 
     let foundSource = false;
 
@@ -88,6 +91,63 @@ export class StackManager {
       stk.push(frame);
     }
     return stk;
+  }
+
+  private cpuInfoToRegs(cpuInfo: CpuInfo): Map<number, number> {
+    const m = new Map<number, number>();
+    for (let i = 0; i < 8; i++) {
+      m.set(i, Number(cpuInfo[`d${i}` as keyof CpuInfo]));
+      m.set(8 + i, Number(cpuInfo[`a${i}` as keyof CpuInfo]));
+    }
+    return m;
+  }
+
+  // Unwind the call stack using DWARF .debug_frame CFA information.
+  // m68k convention: JSR pushes 4-byte return address; CFA is the caller's SP
+  // before that push, so the return address sits at mem[CFA - 4].
+  // When the frame uses something different as SP as the CFA register (link Ax case), 
+  // the saved Ax is at mem[CFA - 8] and must be restored for the next unwind step.
+  private async dwarfUnwindStack(
+    pc: number,
+    initialSp: number,
+    cpuInfo: CpuInfo,
+    maxLength: number,
+  ): Promise<[number, number][]> {
+    const addresses: [number, number][] = [[pc, pc]];
+    const regs = this.cpuInfoToRegs(cpuInfo);
+    regs.set(15, initialSp); // DWARF r15 = A7/SP; use caller-supplied value (handles exception USP)
+    let currentPc = pc;
+
+    while (addresses.length < maxLength) {
+      const cfa = this.sourceMap.getCfaForPc(currentPc);
+      if (!cfa) break;
+
+      const cfaVal = (regs.get(cfa.reg) ?? 0) + cfa.offset;
+
+      let retAddrBuf: Buffer;
+      try {
+        retAddrBuf = await this.vAmiga.readMemory(cfaVal - 4, 4);
+      } catch {
+        break;
+      }
+      const returnAddress = retAddrBuf.readUInt32BE(0);
+      if (!this.vAmiga.isValidAddress(returnAddress) || returnAddress <= 0x100 || returnAddress & 1) break;
+
+      regs.set(15, cfaVal); // caller's SP = CFA
+      // If CFA reg is not SP (DWARF r15 = A7), it was set by `link Ax, #N`,
+      // which saves Ax on the stack; restore it from mem[CFA-8] for the next frame.
+      if (cfa.reg !== 15) {
+        try {
+          const fpBuf = await this.vAmiga.readMemory(cfaVal - 8, 4);
+          regs.set(cfa.reg, fpBuf.readUInt32BE(0));
+        } catch { /* ignore */ }
+      }
+
+      addresses.push([returnAddress, returnAddress]);
+      currentPc = returnAddress;
+    }
+
+    return addresses;
   }
 
   /**
