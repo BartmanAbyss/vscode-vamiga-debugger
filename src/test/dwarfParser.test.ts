@@ -1,6 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
-import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { DW_AT, DW_ATE, DW_FORM, DW_TAG, formatSectionFlags, parseDwarf } from '../dwarfParser';
 import * as path from 'path';

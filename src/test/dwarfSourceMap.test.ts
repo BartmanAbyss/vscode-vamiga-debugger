@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { ELFSectionHeader, parseDwarf } from '../dwarfParser';
 import { sourceMapFromDwarf } from '../dwarfSourceMap';

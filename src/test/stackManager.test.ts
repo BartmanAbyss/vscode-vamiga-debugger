@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, beforeEach, afterEach } from '@jest/globals';
 import * as assert from "assert";
 import * as sinon from "sinon";
 import { StackManager } from "../stackManager";
