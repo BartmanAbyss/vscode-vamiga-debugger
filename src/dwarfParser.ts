@@ -31,6 +31,7 @@ export interface CompilationUnit {
   addressSize: number;
   offset: number;
   dies: DebugInfoEntry[];
+  dieMap?: Map<number, DebugInfoEntry>;
 }
 
 export interface DebugInfoEntry {
@@ -39,6 +40,7 @@ export interface DebugInfoEntry {
   attributes: DWARFAttribute[];
   size: number;
   children: DebugInfoEntry[];
+  offset: number;
 }
 
 export interface DWARFAttribute {
@@ -361,6 +363,29 @@ export const DW_AT = {
   threads_scaled: 0x62,
   explicit: 0x63,
   call_all_tail_calls: 0x7c,
+} as const;
+
+export const DW_ATE = {
+  address: 0x01,
+  boolean: 0x02,
+  complex_float: 0x03,
+  float: 0x04,
+  signed: 0x05,
+  signed_char: 0x06,
+  unsigned: 0x07,
+  unsigned_char: 0x08,
+  imaginary_float: 0x09,
+  packed_decimal: 0x0a,
+  numeric_string: 0x0b,
+  edited: 0x0c,
+  signed_fixed: 0x0d,
+  unsigned_fixed: 0x0e,
+  decimal_float: 0x0f,
+  UTF: 0x10,
+  UCS: 0x11,
+  ASCII: 0x12,
+  lo_user: 0x80,
+  hi_user: 0xff,
 } as const;
 
 export const DW_FORM = {
@@ -878,6 +903,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
     offset: number,
     abbrevTable: AbbreviationEntry[],
     addressSize: number,
+    cuStartOffset: number,
   ): DebugInfoEntry | null {
     const abbrevCode = readULEB128(offset);
     if (abbrevCode.value === 0) return null;
@@ -927,6 +953,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
       attributes,
       size: 0,
       children: [],
+      offset,
     };
 
     // Post-process attributes: if a location expression block is present,
@@ -934,20 +961,27 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
     // shared DataView and existing readers.
     for (const attr of attributes) {
       if ((attr.name === DW_AT.location || attr.name === DW_AT.frame_base) && attr.value instanceof Uint8Array) {
-        try {
-          const raw = attr.value as Uint8Array;
-          const baseOffset = raw.byteOffset - elfBuffer.byteOffset;
-          const ops = parseLocationExpressionAt(baseOffset, raw.length, addressSize);
-          attr.value = { raw, ops };
-        } catch (e) {
-          console.warn('Failed to parse location expression', e);
-        }
+        const raw = attr.value as Uint8Array;
+        const baseOffset = raw.byteOffset - elfBuffer.byteOffset;
+        const ops = parseLocationExpressionAt(baseOffset, raw.length, addressSize);
+        attr.value = { raw, ops };
+      }
+
+      // Resolve DW_AT_type references (DW_FORM_ref* forms) into an
+      // object containing the absolute reference offset. The numeric value
+      // encoded in the DIE is an offset relative to the start of the
+      // compilation unit; expose it as `{ ref: absoluteOffset }` so callers
+      // can later locate the referenced DIE.
+      if (attr.name === DW_AT.type && typeof attr.value === 'number') {
+        const rel = attr.value as number;
+        const absolute = cuStartOffset + rel;
+        attr.value = { ref: absolute };
       }
     }
 
     if (abbrevEntry.hasChildren) {
       while (currentOffset < elfBuffer.length) {
-        const child = parseDIE(currentOffset, abbrevTable, addressSize);
+        const child = parseDIE(currentOffset, abbrevTable, addressSize, cuStartOffset);
         if (!child) {
           // Null DIE entry marks the end of children for this parent
           currentOffset += 1;
@@ -1053,11 +1087,37 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
 
     const endOffset = startOffset + length + 4;
     while (offset < endOffset) {
-      const die = parseDIE(offset, abbrevTable, addressSize);
+      const die = parseDIE(offset, abbrevTable, addressSize, startOffset);
       if (!die) break;
       cu.dies.push(die);
       offset += die.size;
     }
+
+    // Build a DIE offset -> DIE object map for fast lookup within this CU
+    const dieMap = new Map<number, DebugInfoEntry>();
+    function buildMap(d: DebugInfoEntry) {
+      dieMap.set(d.offset, d);
+      for (const child of d.children) buildMap(child);
+    }
+    for (const d of cu.dies) buildMap(d);
+
+    // Resolve intra-CU { ref: absolute } objects to actual DIE objects when available
+    for (const d of cu.dies) {
+      const stack: DebugInfoEntry[] = [d];
+      while (stack.length) {
+        const entry = stack.pop()!;
+        for (const attr of entry.attributes) {
+          if (attr && attr.value && typeof attr.value === 'object' && 'ref' in attr.value) {
+            const refOffset = (attr.value as any).ref as number;
+            const target = dieMap.get(refOffset);
+            if (target) (attr.value as any).die = target;
+          }
+        }
+        for (const child of entry.children) stack.push(child);
+      }
+    }
+
+    cu.dieMap = dieMap;
 
     return cu;
   }
@@ -1510,6 +1570,32 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
     is64bit,
     isLittleEndian,
   };
+}
+
+export function findDIEInCU(cu: CompilationUnit, offset: number): DebugInfoEntry | undefined {
+  return cu.dieMap?.get(offset);
+}
+
+/**
+ * Resolve a `{ ref: absoluteOffset }` object to the referenced DIE.
+ * Looks in the provided CU first, then falls back to searching all
+ * compilation units in the parsed `DWARFData`.
+ */
+export function resolveReference(
+  cu: CompilationUnit,
+  refObj: { ref: number } | undefined,
+  dwarfData: DWARFData,
+): DebugInfoEntry | undefined {
+  if (!refObj) return undefined;
+  const local = cu.dieMap?.get(refObj.ref);
+  if (local) return local;
+
+  for (const other of dwarfData.compilationUnits) {
+    if (other === cu) continue;
+    if (other.dieMap && other.dieMap.has(refObj.ref)) return other.dieMap.get(refObj.ref);
+  }
+
+  return undefined;
 }
 
 export function formatSectionFlags(flags: ELFSectionFlags): string {

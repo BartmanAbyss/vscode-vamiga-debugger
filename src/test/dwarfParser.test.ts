@@ -2,7 +2,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
-import { DW_AT, DW_FORM, DW_TAG, formatSectionFlags, parseDwarf } from '../dwarfParser';
+import { DW_AT, DW_ATE, DW_FORM, DW_TAG, formatSectionFlags, parseDwarf } from '../dwarfParser';
 import * as path from 'path';
 
 type DebugInfoEntry = {
@@ -30,7 +30,7 @@ function dwName(map: Record<string, number>, code: number | undefined): string {
   return entry ? `${entry[0]} (0x${code.toString(16)})` : `0x${code.toString(16)}`;
 }
 
-function formatAttrValue(value: any): string {
+function formatAttrValue(value: any, attrName?: number): string {
   if (value === undefined) {
     return 'undefined';
   }
@@ -38,6 +38,9 @@ function formatAttrValue(value: any): string {
     return `"${value}"`;
   }
   if (typeof value === 'number') {
+    if (attrName === DW_AT.encoding) {
+      return dwName(DW_ATE, value);
+    }
     return value < 0 ? `-0x${(-value).toString(16)}` : `0x${value.toString(16)}`;
   }
   // If this is a parsed location/frame_base value, format contained DW_OP
@@ -62,16 +65,44 @@ function formatAttrValue(value: any): string {
   return JSON.stringify(value);
 }
 
-function dumpAttribute(attr: { name: number; form: number; value: any }): string {
-  return `name=${dwName(DW_AT, attr.name)} form=${dwName(DW_FORM, attr.form)} value=${formatAttrValue(attr.value)}`;
+function dumpAttributeLines(attr: { name: number; form: number; value: any }, attrDepth: number): string[] {
+  // returns an array of lines: first line is the attribute line (no leading indent),
+  // subsequent lines (if any) are pre-indented lines (e.g., an embedded DIE dump)
+  const base = `name=${dwName(DW_AT, attr.name)} form=${dwName(DW_FORM, attr.form)} value=`;
+
+  // Handle ref objects that may include a resolved `.die`
+  if (attr && attr.value && typeof attr.value === 'object' && 'ref' in attr.value) {
+    const refObj = attr.value as any;
+    const refLine = `${base}{ref:0x${refObj.ref.toString(16)}}`;
+    if (refObj.die) {
+      // Reuse the existing DIE dumper to render the referenced DIE one level deeper
+      const dieDump = dumpDIE(refObj.die as DebugInfoEntry, attrDepth + 1);
+      const dieLines = dieDump.split('\n');
+      return [refLine, ...dieLines];
+    }
+    return [refLine];
+  }
+
+  // Fallback: single-line attribute
+  return [`${base}${formatAttrValue(attr.value, attr.name)}`];
 }
 
 function dumpDIE(die: DebugInfoEntry, depth = 0): string {
   const indent = '  '.repeat(depth);
   const attrIndent = '  '.repeat(depth + 1);
-  const attrs = die.attributes
-    .map((attr) => `${attrIndent}${dumpAttribute(attr)}`)
-    .join('\n');
+
+  const attrsLines: string[] = [];
+  for (const attr of die.attributes) {
+    const lines = dumpAttributeLines(attr, depth + 1);
+    // Prefix the first line with the attribute indent; subsequent lines are
+    // assumed to already contain proper indentation from dumpDIE output.
+    attrsLines.push(`${attrIndent}${lines[0]}`);
+    if (lines.length > 1) {
+      attrsLines.push(...lines.slice(1));
+    }
+  }
+
+  const attrs = attrsLines.join('\n');
   const header = `${indent}- DIE(code=0x${die.abbrevCode.toString(16)}, tag=${dwName(DW_TAG, die.tag)})`;
   const body = attrs.length ? `\n${attrs}` : '';
 

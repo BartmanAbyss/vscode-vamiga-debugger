@@ -68,9 +68,9 @@ export function sourceMapFromDwarf(
         size: header.size,
         memType,
       });
-      sectionOffsets.push(offsets[i++] - header.addr);
+      sectionOffsets.push({ loaded: true, offset: offsets[i++] - header.addr });
     } else {
-      sectionOffsets.push(0); // zero for filtered sections
+      sectionOffsets.push({ loaded: false });
     }
   }
 
@@ -229,9 +229,8 @@ export function sourceMapFromDwarf(
 
   // Extract symbols from ELF symbol table
   for (const elfSymbol of dwarfData.elfSymbols) {
-    if (sectionOffsets[elfSymbol.sectionIndex]) {
-      symbols[elfSymbol.name] =
-        elfSymbol.value + sectionOffsets[elfSymbol.sectionIndex];
+    if (sectionOffsets[elfSymbol.sectionIndex]?.loaded) {
+      symbols[elfSymbol.name] = elfSymbol.value + sectionOffsets[elfSymbol.sectionIndex].offset;
     }
   }
 
