@@ -442,7 +442,7 @@ export class VamigaDebugAdapter extends LoggingDebugSession {
     }
   }
 
-  protected scopesRequest(response: DebugProtocol.ScopesResponse): void {
+  protected scopesRequest(response: DebugProtocol.ScopesResponse, _args: DebugProtocol.ScopesArguments): void {
     const scopes = this.variablesManager?.getScopes() ?? [];
     response.body = { scopes };
     this.sendResponse(response);

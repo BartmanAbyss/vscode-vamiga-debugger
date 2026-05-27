@@ -64,6 +64,7 @@ export class VariablesManager {
       ),
       new Scope("Vectors", this.variableHandles.create("vectors"), false),
       new Scope("Symbols", this.variableHandles.create("symbols"), false),
+      new Scope("Locals", this.variableHandles.create("locals"), false),
       new Scope("Segments", this.variableHandles.create("segments"), false),
     ];
   }
@@ -96,6 +97,8 @@ export class VariablesManager {
       return await this.symbolVariables();
     } else if (id.startsWith("symbol_ptr_")) {
       return this.symbolPointerVariables(id);
+    } else if (id === "locals") {
+      return await this.localVariables();
     } else if (id === "segments") {
       return this.segmentVariables();
     }
@@ -362,6 +365,12 @@ export class VariablesManager {
     }
   }
 
+  public async localVariables(): Promise<DebugProtocol.Variable[]> {
+    //const cpuInfo = await this.vAmiga.getCpuInfo();
+    //cpuInfo.pc
+    return [];
+  }
+  
   public segmentVariables(): DebugProtocol.Variable[] {
     const segments = this.sourceMap.getSegmentsInfo();
     return segments.map((seg) => {

@@ -17,95 +17,95 @@ Contents of the .debug_aranges section:
 Contents of the .debug_info section:
 
   Compilation Unit @ offset 0:
-   Length:        0x155 (32-bit)
+   Length:        0x154 (32-bit)
    Version:       5
    Unit Type:     DW_UT_compile (1)
    Abbrev Offset: 0
    Pointer Size:  4
  <0><c>: Abbrev Number: 3 (DW_TAG_compile_unit)
-    <d>   DW_AT_producer    : GNU C23 15.1.0 -mcpu=68000 -g
+    <d>   DW_AT_producer    : GNU C23 15.2.0 -mcpu=68000 -g
     <2b>   DW_AT_language    : 29	(C11)
     <2c>   Unknown AT value: 90: 3
     <2d>   Unknown AT value: 91: 0x31647
     <31>   DW_AT_name        : simple_c.c
-    <3c>   DW_AT_comp_dir    : c:\Users\bwodok\Documents\Visual_Studio_Code\vscode-vamiga-debugger\src\test\fixtures\amigaPrograms\simple_c
-    <a9>   DW_AT_ranges      : 0xc
-    <ad>   DW_AT_low_pc      : 0
-    <b1>   DW_AT_stmt_list   : 0
- <1><b5>: Abbrev Number: 4 (DW_TAG_variable)
-    <b6>   DW_AT_name        : global_a
-    <bf>   DW_AT_decl_file   : 1
-    <c0>   DW_AT_decl_line   : 1
-    <c1>   DW_AT_decl_column : 5
-    <c2>   DW_AT_type        : <0xcc>
-    <c6>   DW_AT_external    : 1
-    <c6>   DW_AT_location    : 5 byte block: 3 0 0 20 50 	(DW_OP_addr: 2050)
- <1><cc>: Abbrev Number: 5 (DW_TAG_base_type)
-    <cd>   DW_AT_byte_size   : 4
-    <ce>   DW_AT_encoding    : 5	(signed)
-    <cf>   DW_AT_name        : int
- <1><d3>: Abbrev Number: 6 (DW_TAG_subprogram)
-    <d4>   DW_AT_external    : 1
-    <d4>   DW_AT_name        : _start
-    <db>   DW_AT_decl_file   : 1
-    <dc>   DW_AT_decl_line   : 6
-    <dd>   DW_AT_decl_column : 71
-    <de>   DW_AT_prototyped  : 1
-    <de>   DW_AT_low_pc      : 0
-    <e2>   DW_AT_high_pc     : 0x42
-    <e6>   DW_AT_frame_base  : 1 byte block: 9c 	(DW_OP_call_frame_cfa)
-    <e8>   DW_AT_call_all_tail_calls: 1
-    <e8>   DW_AT_sibling     : <0x137>
- <2><ec>: Abbrev Number: 1 (DW_TAG_variable)
-    <ed>   DW_AT_name        : local_a
-    <f5>   DW_AT_decl_file   : 1
-    <f5>   DW_AT_decl_line   : 7
-    <f6>   DW_AT_decl_column : 6
-    <f7>   DW_AT_type        : <0xcc>
-    <fb>   DW_AT_location    : 2 byte block: 7d 7c 	(DW_OP_breg13 (r13): -4)
- <2><fe>: Abbrev Number: 2 (DW_TAG_lexical_block)
-    <ff>   DW_AT_low_pc      : 0x18
-    <103>   DW_AT_high_pc     : 0x28
- <3><107>: Abbrev Number: 1 (DW_TAG_variable)
-    <108>   DW_AT_name        : local_b
-    <110>   DW_AT_decl_file   : 1
-    <110>   DW_AT_decl_line   : 10
-    <111>   DW_AT_decl_column : 7
-    <112>   DW_AT_type        : <0xcc>
-    <116>   DW_AT_location    : 2 byte block: 7d 78 	(DW_OP_breg13 (r13): -8)
- <3><119>: Abbrev Number: 2 (DW_TAG_lexical_block)
-    <11a>   DW_AT_low_pc      : 0x2c
-    <11e>   DW_AT_high_pc     : 0x14
- <4><122>: Abbrev Number: 1 (DW_TAG_variable)
-    <123>   DW_AT_name        : local_c
-    <12b>   DW_AT_decl_file   : 1
-    <12b>   DW_AT_decl_line   : 13
-    <12c>   DW_AT_decl_column : 8
-    <12d>   DW_AT_type        : <0xcc>
-    <131>   DW_AT_location    : 2 byte block: 7d 74 	(DW_OP_breg13 (r13): -12)
- <4><134>: Abbrev Number: 0
- <3><135>: Abbrev Number: 0
- <2><136>: Abbrev Number: 0
- <1><137>: Abbrev Number: 7 (DW_TAG_subprogram)
-    <138>   DW_AT_external    : 1
-    <138>   DW_AT_name        : func
-    <13d>   DW_AT_decl_file   : 1
-    <13e>   DW_AT_decl_line   : 3
-    <13f>   DW_AT_decl_column : 6
-    <140>   DW_AT_prototyped  : 1
-    <140>   DW_AT_low_pc      : 0x44
-    <144>   DW_AT_high_pc     : 0xa
-    <148>   DW_AT_frame_base  : 1 byte block: 9c 	(DW_OP_call_frame_cfa)
-    <14a>   DW_AT_call_all_calls: 1
- <2><14a>: Abbrev Number: 8 (DW_TAG_formal_parameter)
-    <14b>   DW_AT_name        : a
-    <14d>   DW_AT_decl_file   : 1
-    <14e>   DW_AT_decl_line   : 3
-    <14f>   DW_AT_decl_column : 15
-    <150>   DW_AT_type        : <0xcc>
-    <154>   DW_AT_location    : 2 byte block: 91 0 	(DW_OP_fbreg: 0)
- <2><157>: Abbrev Number: 0
- <1><158>: Abbrev Number: 0
+    <3c>   DW_AT_comp_dir    : C:\Users\Chuck\Documents\Visual_Studio_Code\vscode-vamiga-debugger\src\test\fixtures\amigaPrograms\simple_c
+    <a8>   DW_AT_ranges      : 0xc
+    <ac>   DW_AT_low_pc      : 0
+    <b0>   DW_AT_stmt_list   : 0
+ <1><b4>: Abbrev Number: 4 (DW_TAG_variable)
+    <b5>   DW_AT_name        : global_a
+    <be>   DW_AT_decl_file   : 1
+    <bf>   DW_AT_decl_line   : 1
+    <c0>   DW_AT_decl_column : 5
+    <c1>   DW_AT_type        : <0xcb>
+    <c5>   DW_AT_external    : 1
+    <c5>   DW_AT_location    : 5 byte block: 3 0 0 20 50 	(DW_OP_addr: 2050)
+ <1><cb>: Abbrev Number: 5 (DW_TAG_base_type)
+    <cc>   DW_AT_byte_size   : 4
+    <cd>   DW_AT_encoding    : 5	(signed)
+    <ce>   DW_AT_name        : int
+ <1><d2>: Abbrev Number: 6 (DW_TAG_subprogram)
+    <d3>   DW_AT_external    : 1
+    <d3>   DW_AT_name        : _start
+    <da>   DW_AT_decl_file   : 1
+    <db>   DW_AT_decl_line   : 6
+    <dc>   DW_AT_decl_column : 71
+    <dd>   DW_AT_prototyped  : 1
+    <dd>   DW_AT_low_pc      : 0
+    <e1>   DW_AT_high_pc     : 0x42
+    <e5>   DW_AT_frame_base  : 1 byte block: 9c 	(DW_OP_call_frame_cfa)
+    <e7>   DW_AT_call_all_tail_calls: 1
+    <e7>   DW_AT_sibling     : <0x136>
+ <2><eb>: Abbrev Number: 1 (DW_TAG_variable)
+    <ec>   DW_AT_name        : local_a
+    <f4>   DW_AT_decl_file   : 1
+    <f4>   DW_AT_decl_line   : 7
+    <f5>   DW_AT_decl_column : 6
+    <f6>   DW_AT_type        : <0xcb>
+    <fa>   DW_AT_location    : 2 byte block: 7d 7c 	(DW_OP_breg13 (r13): -4)
+ <2><fd>: Abbrev Number: 2 (DW_TAG_lexical_block)
+    <fe>   DW_AT_low_pc      : 0x18
+    <102>   DW_AT_high_pc     : 0x28
+ <3><106>: Abbrev Number: 1 (DW_TAG_variable)
+    <107>   DW_AT_name        : local_b
+    <10f>   DW_AT_decl_file   : 1
+    <10f>   DW_AT_decl_line   : 10
+    <110>   DW_AT_decl_column : 7
+    <111>   DW_AT_type        : <0xcb>
+    <115>   DW_AT_location    : 2 byte block: 7d 78 	(DW_OP_breg13 (r13): -8)
+ <3><118>: Abbrev Number: 2 (DW_TAG_lexical_block)
+    <119>   DW_AT_low_pc      : 0x2c
+    <11d>   DW_AT_high_pc     : 0x14
+ <4><121>: Abbrev Number: 1 (DW_TAG_variable)
+    <122>   DW_AT_name        : local_c
+    <12a>   DW_AT_decl_file   : 1
+    <12a>   DW_AT_decl_line   : 13
+    <12b>   DW_AT_decl_column : 8
+    <12c>   DW_AT_type        : <0xcb>
+    <130>   DW_AT_location    : 2 byte block: 7d 74 	(DW_OP_breg13 (r13): -12)
+ <4><133>: Abbrev Number: 0
+ <3><134>: Abbrev Number: 0
+ <2><135>: Abbrev Number: 0
+ <1><136>: Abbrev Number: 7 (DW_TAG_subprogram)
+    <137>   DW_AT_external    : 1
+    <137>   DW_AT_name        : func
+    <13c>   DW_AT_decl_file   : 1
+    <13d>   DW_AT_decl_line   : 3
+    <13e>   DW_AT_decl_column : 6
+    <13f>   DW_AT_prototyped  : 1
+    <13f>   DW_AT_low_pc      : 0x44
+    <143>   DW_AT_high_pc     : 0xa
+    <147>   DW_AT_frame_base  : 1 byte block: 9c 	(DW_OP_call_frame_cfa)
+    <149>   DW_AT_call_all_calls: 1
+ <2><149>: Abbrev Number: 8 (DW_TAG_formal_parameter)
+    <14a>   DW_AT_name        : a
+    <14c>   DW_AT_decl_file   : 1
+    <14d>   DW_AT_decl_line   : 3
+    <14e>   DW_AT_decl_column : 15
+    <14f>   DW_AT_type        : <0xcb>
+    <153>   DW_AT_location    : 2 byte block: 91 0 	(DW_OP_fbreg: 0)
+ <2><156>: Abbrev Number: 0
+ <1><157>: Abbrev Number: 0
 
 Contents of the .debug_abbrev section:
 
@@ -184,11 +184,11 @@ Contents of the .debug_abbrev section:
 Raw dump of debug contents of section .debug_line:
 
   Offset:                      0
-  Length:                      289
+  Length:                      288
   DWARF Version:               5
   Address size (bytes):        4
   Segment selector (bytes):    0
-  Prologue Length:             161
+  Prologue Length:             160
   Minimum Instruction Length:  1
   Maximum Ops per Instruction: 1
   Initial value of 'is_stmt':  1
@@ -212,49 +212,49 @@ Raw dump of debug contents of section .debug_line:
 
  The Directory Table (offset 0x22, lines 1, columns 1):
   Entry	Name
-  0	c:\Users\bwodok\Documents\Visual_Studio_Code\vscode-vamiga-debugger\src\test\fixtures\amigaPrograms\simple_c
+  0	C:\Users\Chuck\Documents\Visual_Studio_Code\vscode-vamiga-debugger\src\test\fixtures\amigaPrograms\simple_c
 
- The File Name Table (offset 0x95, lines 2, columns 2):
+ The File Name Table (offset 0x94, lines 2, columns 2):
   Entry	Dir	Name
   0	0	simple_c.c
   1	0	simple_c.c
 
  Line Number Statements:
-  [0x000000ad]  Extended opcode 2: set Address to 0
-  [0x000000b4]  Special opcode 15: advance Address by 0 to 0 and Line by 5 to 6
-  [0x000000b5]  Set column to 80
-  [0x000000b7]  Extended opcode 2: set Address to 0x4
-  [0x000000be]  Special opcode 11: advance Address by 0 to 0x4 and Line by 1 to 7
-  [0x000000bf]  Set column to 6
-  [0x000000c1]  Extended opcode 2: set Address to 0xc
-  [0x000000c8]  Special opcode 11: advance Address by 0 to 0xc and Line by 1 to 8
-  [0x000000c9]  Set column to 2
-  [0x000000cb]  Extended opcode 2: set Address to 0x18
-  [0x000000d2]  Special opcode 12: advance Address by 0 to 0x18 and Line by 2 to 10
-  [0x000000d3]  Set column to 7
-  [0x000000d5]  Extended opcode 2: set Address to 0x20
-  [0x000000dc]  Special opcode 11: advance Address by 0 to 0x20 and Line by 1 to 11
-  [0x000000dd]  Set column to 3
-  [0x000000df]  Extended opcode 2: set Address to 0x2c
-  [0x000000e6]  Special opcode 12: advance Address by 0 to 0x2c and Line by 2 to 13
-  [0x000000e7]  Set column to 8
-  [0x000000e9]  Extended opcode 2: set Address to 0x34
-  [0x000000f0]  Special opcode 11: advance Address by 0 to 0x34 and Line by 1 to 14
-  [0x000000f1]  Set column to 4
-  [0x000000f3]  Extended opcode 2: set Address to 0x40
-  [0x000000fa]  Special opcode 13: advance Address by 0 to 0x40 and Line by 3 to 17
-  [0x000000fb]  Set column to 7
-  [0x000000fd]  Extended opcode 2: set Address to 0x42
-  [0x00000104]  Extended opcode 1: End of Sequence
+  [0x000000ac]  Extended opcode 2: set Address to 0
+  [0x000000b3]  Special opcode 15: advance Address by 0 to 0 and Line by 5 to 6
+  [0x000000b4]  Set column to 80
+  [0x000000b6]  Extended opcode 2: set Address to 0x4
+  [0x000000bd]  Special opcode 11: advance Address by 0 to 0x4 and Line by 1 to 7
+  [0x000000be]  Set column to 6
+  [0x000000c0]  Extended opcode 2: set Address to 0xc
+  [0x000000c7]  Special opcode 11: advance Address by 0 to 0xc and Line by 1 to 8
+  [0x000000c8]  Set column to 2
+  [0x000000ca]  Extended opcode 2: set Address to 0x18
+  [0x000000d1]  Special opcode 12: advance Address by 0 to 0x18 and Line by 2 to 10
+  [0x000000d2]  Set column to 7
+  [0x000000d4]  Extended opcode 2: set Address to 0x20
+  [0x000000db]  Special opcode 11: advance Address by 0 to 0x20 and Line by 1 to 11
+  [0x000000dc]  Set column to 3
+  [0x000000de]  Extended opcode 2: set Address to 0x2c
+  [0x000000e5]  Special opcode 12: advance Address by 0 to 0x2c and Line by 2 to 13
+  [0x000000e6]  Set column to 8
+  [0x000000e8]  Extended opcode 2: set Address to 0x34
+  [0x000000ef]  Special opcode 11: advance Address by 0 to 0x34 and Line by 1 to 14
+  [0x000000f0]  Set column to 4
+  [0x000000f2]  Extended opcode 2: set Address to 0x40
+  [0x000000f9]  Special opcode 13: advance Address by 0 to 0x40 and Line by 3 to 17
+  [0x000000fa]  Set column to 7
+  [0x000000fc]  Extended opcode 2: set Address to 0x42
+  [0x00000103]  Extended opcode 1: End of Sequence
 
-  [0x00000107]  Extended opcode 2: set Address to 0x44
-  [0x0000010e]  Special opcode 12: advance Address by 0 to 0x44 and Line by 2 to 3
-  [0x0000010f]  Set column to 18
-  [0x00000111]  Extended opcode 2: set Address to 0x48
-  [0x00000118]  Special opcode 11: advance Address by 0 to 0x48 and Line by 1 to 4
-  [0x00000119]  Set column to 1
-  [0x0000011b]  Extended opcode 2: set Address to 0x4e
-  [0x00000122]  Extended opcode 1: End of Sequence
+  [0x00000106]  Extended opcode 2: set Address to 0x44
+  [0x0000010d]  Special opcode 12: advance Address by 0 to 0x44 and Line by 2 to 3
+  [0x0000010e]  Set column to 18
+  [0x00000110]  Extended opcode 2: set Address to 0x48
+  [0x00000117]  Special opcode 11: advance Address by 0 to 0x48 and Line by 1 to 4
+  [0x00000118]  Set column to 1
+  [0x0000011a]  Extended opcode 2: set Address to 0x4e
+  [0x00000121]  Extended opcode 1: End of Sequence
 
 
 Contents of the .debug_frame section:

@@ -28,12 +28,13 @@ describe("VariablesManager - Comprehensive Tests", () => {
     it("should return all scopes", () => {
       const scopes = variablesManager.getScopes();
 
-      assert.strictEqual(scopes.length, 5);
+      assert.strictEqual(scopes.length, 6);
       assert.strictEqual(scopes[0].name, "CPU Registers");
       assert.strictEqual(scopes[1].name, "Custom Registers");
       assert.strictEqual(scopes[2].name, "Vectors");
       assert.strictEqual(scopes[3].name, "Symbols");
-      assert.strictEqual(scopes[4].name, "Segments");
+      assert.strictEqual(scopes[4].name, "Locals");
+      assert.strictEqual(scopes[5].name, "Segments");
     });
 
     it("should create unique variable handles for each scope", () => {
