@@ -22,12 +22,20 @@ export type LocalLocation =
   | { kind: 'cfa';    offset: number }
   | { kind: 'unknown' };
 
+export interface StructField {
+  name: string;
+  typeName: string;
+  byteSize: number;
+  offset: number;
+}
+
 export interface LocalVariable {
   name: string;
   typeName: string;
   byteSize: number;
   location: LocalLocation;
   pointeeByteSize?: number;
+  pointeeFields?: StructField[];
 }
 
 export interface ScopeEntry {

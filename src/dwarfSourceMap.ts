@@ -8,7 +8,7 @@ import {
   LineNumberInstruction,
   LineNumberProgram,
 } from "./dwarfParser";
-import { SourceMap, ScopeEntry, LocalVariable, LocalLocation, Location, Segment, InlineFrame, InlineEntry } from "./sourceMap";
+import { SourceMap, ScopeEntry, LocalVariable, LocalLocation, Location, Segment, InlineFrame, InlineEntry, StructField } from "./sourceMap";
 import { DebugFrame } from "./dwarfParser";
 import { MemoryType } from "./amigaHunkParser";
 
@@ -432,6 +432,19 @@ function resolveByteSize(typeDie: DebugInfoEntry | undefined, addressSize: numbe
   }
 }
 
+function extractStructFields(structDie: DebugInfoEntry, addressSize: number): StructField[] {
+  return structDie.children
+    .filter(m => m.tag === DW_TAG.member)
+    .map(member => {
+      const memberName = findAttribute(member, DW_AT.name)?.value as string ?? '???';
+      const memberTypeDie = getTypeDie(member);
+      const memberTypeName = memberTypeDie ? typeNameFromDie(memberTypeDie) : '<unknown>';
+      const memberByteSize = resolveByteSize(memberTypeDie, addressSize);
+      const memberOffset = findAttribute(member, DW_AT.data_member_location)?.value;
+      return { name: memberName, typeName: memberTypeName, byteSize: memberByteSize, offset: typeof memberOffset === 'number' ? memberOffset : 0 };
+    });
+}
+
 function dieToLocalVar(
   die: DebugInfoEntry,
   relocate: (addr: number) => number | undefined,
@@ -444,14 +457,24 @@ function dieToLocalVar(
   const byteSize = resolveByteSize(typeDie, addressSize);
   const location = resolveLocation(die, relocate, frameBase);
   let pointeeByteSize: number | undefined;
+  let pointeeFields: StructField[] | undefined;
   if (typeDie?.tag === DW_TAG.pointer_type) {
     const pointeeDie = getTypeDie(typeDie);
     if (pointeeDie) {
-      const sz = resolveByteSize(pointeeDie, addressSize);
-      pointeeByteSize = sz > 0 ? sz : 0;
+      if (pointeeDie.tag === DW_TAG.structure_type) {
+        const fields = extractStructFields(pointeeDie, addressSize);
+        if (fields.length > 0) pointeeFields = fields;
+      } else {
+        const sz = resolveByteSize(pointeeDie, addressSize);
+        if (sz > 0) pointeeByteSize = sz;
+      }
     }
   }
-  return { name, typeName, byteSize, location, ...(pointeeByteSize !== undefined && { pointeeByteSize }) };
+  return {
+    name, typeName, byteSize, location,
+    ...(pointeeByteSize !== undefined && { pointeeByteSize }),
+    ...(pointeeFields && { pointeeFields }),
+  };
 }
 
 function buildScopeTable(

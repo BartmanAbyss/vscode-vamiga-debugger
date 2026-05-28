@@ -130,6 +130,49 @@ describe("VariablesManager - Comprehensive Tests", () => {
       assert.ok(!vars[0].value.includes('('), 'Expected no parens for invalid address');
       assert.strictEqual(vars[0].variablesReference, 0);
     });
+
+    it("should show address and expand to fields for a pointer-to-struct", async () => {
+      const PTR_ADDR = 0x6000;
+      const STRUCT_ADDR = 0x2024;
+      mockVAmiga.getCpuInfo.resolves(mockCpuBase);
+      mockVAmiga.isValidAddress.returns(true);
+      mockSourceMap.getLocalsForPc.returns([{
+        name: 'ptr_struct',
+        typeName: 'struct Struct *',
+        byteSize: 4,
+        location: { kind: 'addr', address: PTR_ADDR },
+        pointeeFields: [
+          { name: '_int',   typeName: 'int',       byteSize: 4, offset: 0 },
+          { name: '_short', typeName: 'short int', byteSize: 2, offset: 4 },
+          { name: '_char',  typeName: 'char',       byteSize: 1, offset: 6 },
+        ],
+      }]);
+      mockSourceMap.findSymbolOffset.returns(undefined);
+      mockVAmiga.peek32.withArgs(PTR_ADDR).resolves(STRUCT_ADDR);
+      mockVAmiga.peek32.withArgs(STRUCT_ADDR + 0).resolves(0x99999999);
+      mockVAmiga.peek16.withArgs(STRUCT_ADDR + 4).resolves(0x8888);
+      mockVAmiga.peek8.withArgs(STRUCT_ADDR + 6).resolves(0x77);
+
+      const scopes = variablesManager.getScopes(0x1000);
+      const localsRef = scopes[0].variablesReference;
+      const vars = await variablesManager.getVariables(localsRef);
+
+      assert.strictEqual(vars.length, 1);
+      assert.ok(vars[0].value.includes('0x00002024'), `Expected pointer address in "${vars[0].value}"`);
+      assert.ok(vars[0].variablesReference !== 0, 'Expected non-zero variablesReference for struct pointer');
+
+      const fields = await variablesManager.getVariables(vars[0].variablesReference);
+      assert.strictEqual(fields.length, 3);
+      assert.strictEqual(fields[0].name, '_int');
+      assert.ok(fields[0].value.includes('99999999'));
+      assert.strictEqual(fields[0].type, 'int');
+      assert.strictEqual(fields[1].name, '_short');
+      assert.ok(fields[1].value.includes('8888'));
+      assert.strictEqual(fields[1].type, 'short int');
+      assert.strictEqual(fields[2].name, '_char');
+      assert.ok(fields[2].value.includes('77'));
+      assert.strictEqual(fields[2].type, 'char');
+    });
   });
 
   describe("CPU Register Variables", () => {

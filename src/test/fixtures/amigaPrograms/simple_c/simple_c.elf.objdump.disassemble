@@ -5,16 +5,13 @@ simple_c.elf:     file format elf32-m68k
 Disassembly of section .text:
 
 00000000 <_start>:
-   0:	4fef fff4      	lea -12(sp),sp
-   4:	2f7c 0000 2034 	move.l #8244,8(sp)
-   a:	0008 
-   c:	2f7c 0000 2038 	move.l #8248,4(sp)
-  12:	0004 
-  14:	2ebc 0000 203a 	move.l #8250,(sp)
-  1a:	206f 0008      	movea.l 8(sp),a0
-  1e:	20bc 9999 9999 	move.l #-1717986919,(a0)
-  24:	206f 0004      	movea.l 4(sp),a0
-  28:	30bc 8888      	move.w #-30584,(a0)
-  2c:	2057           	movea.l (sp),a0
-  2e:	10bc 0077      	move.b #119,(a0)
-  32:	60fe           	bra.s 32 <_start+0x32>
+   0:	598f           	subq.l #4,sp
+   2:	2ebc 0000 2024 	move.l #8228,(sp)
+   8:	2057           	movea.l (sp),a0
+   a:	20bc 9999 9999 	move.l #-1717986919,(a0)
+  10:	2057           	movea.l (sp),a0
+  12:	317c 8888 0004 	move.w #-30584,4(a0)
+  18:	2057           	movea.l (sp),a0
+  1a:	117c 0077 0006 	move.b #119,6(a0)
+  20:	60fe           	bra.s 20 <_start+0x20>
+  22:	4e71           	nop
