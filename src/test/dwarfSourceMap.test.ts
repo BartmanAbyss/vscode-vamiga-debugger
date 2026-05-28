@@ -62,36 +62,36 @@ describe('dwarfSourceMap', () => {
   });
 
   it('should return inline frames for a PC inside an inlined function', () => {
-    const testFile = path.join(__dirname, 'fixtures/amigaPrograms', 'simple_c/simple_c.elf');
+    const testFile = path.join(__dirname, 'fixtures/amigaPrograms', 'simple_c/01_inline/simple_c.elf');
     const buffer = readFileSync(testFile);
     const dwarf = parseDwarf(buffer);
 
     const offsets = [...dwarf.sections.values()].filter(s => isSectionIncluded(s)).map(s => s.addr);
     const sourceMap = sourceMapFromDwarf(dwarf, offsets, '');
 
-    // Inline 'func' at ELF [0x10,0x12) → loaded [0x10,0x12), call_line=8
-    const frames = sourceMap.getInlineFramesForPc(0x11);
+    // Inline 'func_inline' at ELF [0x10,0x18), call_line=8
+    const frames = sourceMap.getInlineFramesForPc(0x10);
     expect(frames.length).toBe(1);
-    expect(frames[0].name).toBe('func');
-    expect(frames[0].callLine).toBe(8);
+    expect(frames[0].name).toBe('func_inline');
+    expect(frames[0].callLine).toBe(9);
     expect(frames[0].callPath).toContain('simple_c.c');
 
-    // Exclusive upper bound: 0x12 is not inside the range
-    expect(sourceMap.getInlineFramesForPc(0x12).length).toBe(0);
+    // Exclusive upper bound: 0x18 is not inside the range
+    expect(sourceMap.getInlineFramesForPc(0x18).length).toBe(0);
 
-    // Second inline at [0x20,0x22), call_line=11
-    const frames2 = sourceMap.getInlineFramesForPc(0x21);
+    // Second inline at [0x26,0x30), call_line=11
+    const frames2 = sourceMap.getInlineFramesForPc(0x2e);
     expect(frames2.length).toBe(1);
-    expect(frames2[0].callLine).toBe(11);
+    expect(frames2[0].callLine).toBe(12);
 
-    // Third inline at [0x30,0x32), call_line=14
-    const frames3 = sourceMap.getInlineFramesForPc(0x31);
+    // Third inline at [0x3e,0x48), call_line=14
+    const frames3 = sourceMap.getInlineFramesForPc(0x46);
     expect(frames3.length).toBe(1);
-    expect(frames3[0].callLine).toBe(14);
+    expect(frames3[0].callLine).toBe(15);
   });
 
   it('should return variable DIEs for a PC inside a function range', () => {
-    const testFile = path.join(__dirname, 'fixtures/amigaPrograms', 'simple_c/simple_c.elf');
+    const testFile = path.join(__dirname, 'fixtures/amigaPrograms', 'simple_c/01_inline/simple_c.elf');
     const buffer = readFileSync(testFile);
     const dwarf = parseDwarf(buffer);
 

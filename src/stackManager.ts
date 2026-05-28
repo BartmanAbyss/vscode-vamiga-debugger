@@ -14,16 +14,16 @@ import { SourceMap } from "./sourceMap";
  * - Handling pagination for large stack traces
  */
 export class StackManager {
-  /**
-   * Creates a new StackManager instance.
-   *
-   * @param vAmiga VAmiga instance for reading CPU state and memory
-   * @param sourceMap Source map for resolving addresses to source locations
-   */
+  private lastFrameRegs = new Map<number, Map<number, number>>();
+
   constructor(
     private vAmiga: VAmiga,
     private sourceMap: SourceMap,
   ) {}
+
+  public getFrameRegs(frameId: number): Map<number, number> | undefined {
+    return this.lastFrameRegs.get(frameId);
+  }
 
   /**
    * Generates stack frames for the debug adapter.
@@ -56,10 +56,18 @@ export class StackManager {
     }
 
     const dwCfa = this.sourceMap?.getCfaForPc?.(pc);
-    const addresses = dwCfa !== undefined
-      ? await this.dwarfUnwindStack(pc, stackAddress, cpuInfo, endFrame)
-      : await this.guessStack(pc, stackAddress, endFrame);
+    let addressPairs: [number, number][];
+    let regSnapshots: (Map<number, number> | undefined)[];
+    if (dwCfa !== undefined) {
+      const result = await this.dwarfUnwindStack(pc, stackAddress, cpuInfo, endFrame);
+      addressPairs = result.addresses;
+      regSnapshots = result.snapshots;
+    } else {
+      addressPairs = await this.guessStack(pc, stackAddress, endFrame);
+      regSnapshots = new Array(addressPairs.length).fill(undefined);
+    }
 
+    this.lastFrameRegs.clear();
     let foundSource = false;
 
     // Build the full ordered frame list (inline synthetic frames + real frames),
@@ -67,7 +75,9 @@ export class StackManager {
     const allFrames: StackFrame[] = [];
     let frameId = 0;
 
-    outer: for (const [addr] of addresses) {
+    outer: for (let addrIdx = 0; addrIdx < addressPairs.length; addrIdx++) {
+      const [addr] = addressPairs[addrIdx];
+      const snapshot = regSnapshots[addrIdx];
       const inlines = this.sourceMap?.getInlineFramesForPc?.(addr) ?? [];
 
       // Synthetic inline frames — innermost (deepest nesting) first.
@@ -83,6 +93,7 @@ export class StackManager {
           : new StackFrame(frameId, inlineName);
         f.instructionPointerReference = formatHex(addr);
         allFrames.push(f);
+        if (snapshot) this.lastFrameRegs.set(frameId, snapshot);
         frameId++;
         foundSource = foundSource || inlineLoc !== undefined;
       }
@@ -97,6 +108,7 @@ export class StackManager {
         const f = new StackFrame(frameId, formatAddress(addr, this.sourceMap), new Source(basename(realLoc.path), realLoc.path), realLoc.line);
         f.instructionPointerReference = formatHex(addr);
         allFrames.push(f);
+        if (snapshot) this.lastFrameRegs.set(frameId, snapshot);
         frameId++;
         foundSource = true;
       } else {
@@ -104,6 +116,7 @@ export class StackManager {
         const f = new StackFrame(frameId, formatHex(addr));
         f.instructionPointerReference = formatHex(addr);
         allFrames.push(f);
+        if (snapshot) this.lastFrameRegs.set(frameId, snapshot);
         frameId++;
       }
     }
@@ -130,10 +143,11 @@ export class StackManager {
     initialSp: number,
     cpuInfo: CpuInfo,
     maxLength: number,
-  ): Promise<[number, number][]> {
+  ): Promise<{ addresses: [number, number][]; snapshots: Map<number, number>[] }> {
     const addresses: [number, number][] = [[pc, pc]];
     const regs = this.cpuInfoToRegs(cpuInfo);
     regs.set(15, initialSp); // DWARF r15 = A7/SP; use caller-supplied value (handles exception USP)
+    const snapshots: Map<number, number>[] = [new Map(regs)]; // frame 0 = live registers
     let currentPc = pc;
 
     while (addresses.length < maxLength) {
@@ -162,10 +176,11 @@ export class StackManager {
       }
 
       addresses.push([returnAddress, returnAddress]);
+      snapshots.push(new Map(regs)); // register state restored to caller's perspective
       currentPc = returnAddress;
     }
 
-    return addresses;
+    return { addresses, snapshots };
   }
 
   /**

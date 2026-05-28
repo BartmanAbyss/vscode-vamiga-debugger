@@ -38,6 +38,7 @@ export interface ArrayValue {
 export class VariablesManager {
   private variableHandles = new Handles<string | ArrayValue>();
   private locationHandles = new Handles<Location>();
+  private localsContextByRef = new Map<number, { pc: number | null; regs: Map<number, number> | null }>();
 
   /**
    * Creates a new VariablesManager instance.
@@ -50,15 +51,22 @@ export class VariablesManager {
     private sourceMap: SourceMap,
   ) {}
 
-  public getScopes(): DebugProtocol.Scope[] {
-    return [
-      new Scope("Locals", this.variableHandles.create("locals"), false),
+  public getScopes(pc: number | null = null, regs: Map<number, number> | null = null): DebugProtocol.Scope[] {
+    const scopes: DebugProtocol.Scope[] = [];
+    const hasLocals = pc !== null && ((this.sourceMap?.getLocalsForPc(pc)?.length ?? 0) > 0);
+    if (hasLocals) {
+      const localsRef = this.variableHandles.create('locals');
+      this.localsContextByRef.set(localsRef, { pc, regs });
+      scopes.push(new Scope("Locals", localsRef, false));
+    }
+    scopes.push(
       new Scope("CPU Registers", this.variableHandles.create("registers"), false),
       new Scope("Custom Registers", this.variableHandles.create("custom"), false),
       new Scope("Vectors", this.variableHandles.create("vectors"), false),
       new Scope("Symbols", this.variableHandles.create("symbols"), false),
       new Scope("Segments", this.variableHandles.create("segments"), false),
-    ];
+    );
+    return scopes;
   }
 
   public async getVariables(
@@ -89,8 +97,9 @@ export class VariablesManager {
       return await this.symbolVariables();
     } else if (id.startsWith("symbol_ptr_")) {
       return this.symbolPointerVariables(id);
-    } else if (id === "locals") {
-      return await this.localVariables();
+    } else if (id === 'locals') {
+      const ctx = this.localsContextByRef.get(variableReference);
+      return await this.localVariables(ctx?.pc ?? null, ctx?.regs ?? null);
     } else if (id === "segments") {
       return this.segmentVariables();
     }
@@ -357,30 +366,37 @@ export class VariablesManager {
     }
   }
 
-  private locationToAddress(location: LocalLocation, cpuInfo: CpuInfo): number | undefined {
+  private locationToAddress(
+    location: LocalLocation,
+    cpuInfo: CpuInfo,
+    pc: number,
+    regs: Map<number, number> | null,
+  ): number | undefined {
+    const getReg = (index: number): number => {
+      if (regs) return regs.get(index) ?? 0;
+      if (index < 8) return Number(cpuInfo[`d${index}` as keyof CpuInfo]);
+      return Number(cpuInfo[`a${index - 8}` as keyof CpuInfo]);
+    };
     switch (location.kind) {
-      case 'fbreg': return Number(cpuInfo.a5) + location.offset;
-      case 'breg': {
-        const regName = location.reg < 8 ? `d${location.reg}` : `a${location.reg - 8}`;
-        return Number(cpuInfo[regName as keyof CpuInfo]) + location.offset;
-      }
+      case 'fbreg': return getReg(13) + location.offset; // A5 = DWARF reg 13
+      case 'breg': return getReg(location.reg) + location.offset;
       case 'addr': return location.address;
       case 'cfa': {
-        const cfa = this.sourceMap.getCfaForPc(Number(cpuInfo.pc));
+        const cfa = this.sourceMap.getCfaForPc(pc);
         if (!cfa) return undefined;
-        const regName = cfa.reg < 8 ? `d${cfa.reg}` : `a${cfa.reg - 8}`;
-        return Number(cpuInfo[regName as keyof CpuInfo]) + cfa.offset + location.offset;
+        return getReg(cfa.reg) + cfa.offset + location.offset;
       }
       default: return undefined;
     }
   }
 
-  public async localVariables(): Promise<DebugProtocol.Variable[]> {
+  public async localVariables(pc: number | null = null, regs: Map<number, number> | null = null): Promise<DebugProtocol.Variable[]> {
     const cpuInfo = await this.vAmiga.getCpuInfo();
-    const rawLocals = this.sourceMap.getLocalsForPc(Number(cpuInfo.pc));
+    const effectivePc = pc ?? Number(cpuInfo.pc);
+    const rawLocals = this.sourceMap.getLocalsForPc(effectivePc);
     const locals = await Promise.all(rawLocals.map(async (v) => {
       let value = '???';
-      const address = this.locationToAddress(v.location, cpuInfo);
+      const address = this.locationToAddress(v.location, cpuInfo, effectivePc, regs);
       if (address !== undefined) {
         try {
           if (v.byteSize === 4) {

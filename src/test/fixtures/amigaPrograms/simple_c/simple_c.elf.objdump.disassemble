@@ -9,13 +9,19 @@ Disassembly of section .text:
    4:	2f7c 2222 2222 	move.l #572662306,20(sp)
    a:	0014 
    c:	2eaf 0014      	move.l 20(sp),(sp)
-  10:	4e71           	nop
-  12:	2f7c 3333 3333 	move.l #858993459,16(sp)
-  18:	0010 
-  1a:	2f6f 0010 0004 	move.l 16(sp),4(sp)
-  20:	4e71           	nop
-  22:	2f7c 4444 4444 	move.l #1145324612,12(sp)
-  28:	000c 
-  2a:	2f6f 000c 0008 	move.l 12(sp),8(sp)
-  30:	4e71           	nop
-  32:	60fe           	bra.s 32 <_start+0x32>
+  10:	23d7 0000 204c 	move.l (sp),204c <global_a>
+  16:	4e71           	nop
+  18:	2f7c 3333 3333 	move.l #858993459,16(sp)
+  1e:	0010 
+  20:	2f6f 0010 0004 	move.l 16(sp),4(sp)
+  26:	23ef 0004 0000 	move.l 4(sp),204c <global_a>
+  2c:	204c 
+  2e:	4e71           	nop
+  30:	2f7c 4444 4444 	move.l #1145324612,12(sp)
+  36:	000c 
+  38:	2f6f 000c 0008 	move.l 12(sp),8(sp)
+  3e:	23ef 0008 0000 	move.l 8(sp),204c <global_a>
+  44:	204c 
+  46:	4e71           	nop
+  48:	60fe           	bra.s 48 <_start+0x48>
+  4a:	4e71           	nop

@@ -28,13 +28,23 @@ describe("VariablesManager - Comprehensive Tests", () => {
     it("should return all scopes", () => {
       const scopes = variablesManager.getScopes();
 
-      assert.strictEqual(scopes.length, 6);
+      assert.strictEqual(scopes.length, 5);
+      assert.strictEqual(scopes[0].name, "CPU Registers");
+      assert.strictEqual(scopes[1].name, "Custom Registers");
+      assert.strictEqual(scopes[2].name, "Vectors");
+      assert.strictEqual(scopes[3].name, "Symbols");
+      assert.strictEqual(scopes[4].name, "Segments");
+    });
+
+    it("should include Locals scope only when there are locals for the PC", () => {
+      mockSourceMap.getLocalsForPc.returns([{ name: 'x', byteSize: 4, typeName: 'int', location: { kind: 'addr', address: 0x1000 } }]);
+      const scopes = variablesManager.getScopes(0x1000);
       assert.strictEqual(scopes[0].name, "Locals");
-      assert.strictEqual(scopes[1].name, "CPU Registers");
-      assert.strictEqual(scopes[2].name, "Custom Registers");
-      assert.strictEqual(scopes[3].name, "Vectors");
-      assert.strictEqual(scopes[4].name, "Symbols");
-      assert.strictEqual(scopes[5].name, "Segments");
+      assert.strictEqual(scopes.length, 6);
+
+      mockSourceMap.getLocalsForPc.returns([]);
+      const emptyScopes = variablesManager.getScopes(0x2000);
+      assert.ok(!emptyScopes.some(s => s.name === "Locals"));
     });
 
     it("should create unique variable handles for each scope", () => {
@@ -803,7 +813,7 @@ describe("VariablesManager - Comprehensive Tests", () => {
 
     it("should manage variable and location handles", () => {
       const scopes = variablesManager.getScopes();
-      const registerRef = scopes[1].variablesReference;
+      const registerRef = scopes[0].variablesReference;
 
       const refId = variablesManager.getVariableReference(registerRef);
       assert.strictEqual(refId, "registers");
