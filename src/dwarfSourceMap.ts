@@ -443,7 +443,15 @@ function dieToLocalVar(
   const typeName = typeDie ? typeNameFromDie(typeDie) : '<unknown>';
   const byteSize = resolveByteSize(typeDie, addressSize);
   const location = resolveLocation(die, relocate, frameBase);
-  return { name, typeName, byteSize, location };
+  let pointeeByteSize: number | undefined;
+  if (typeDie?.tag === DW_TAG.pointer_type) {
+    const pointeeDie = getTypeDie(typeDie);
+    if (pointeeDie) {
+      const sz = resolveByteSize(pointeeDie, addressSize);
+      pointeeByteSize = sz > 0 ? sz : 0;
+    }
+  }
+  return { name, typeName, byteSize, location, ...(pointeeByteSize !== undefined && { pointeeByteSize }) };
 }
 
 function buildScopeTable(

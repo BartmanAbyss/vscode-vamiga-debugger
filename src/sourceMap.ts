@@ -27,6 +27,7 @@ export interface LocalVariable {
   typeName: string;
   byteSize: number;
   location: LocalLocation;
+  pointeeByteSize?: number;
 }
 
 export interface ScopeEntry {
@@ -251,10 +252,10 @@ export class SourceMap {
     for (const symbol in this.symbols) {
       const symAddr = this.symbols[symbol];
       const offset = address - symAddr;
-      // Address is after symbol and in same segment
       if (
         offset >= 0 &&
-        currentSegment === this.findSegmentForAddress(symAddr)
+        currentSegment === this.findSegmentForAddress(symAddr) &&
+        (!ret || offset < ret.offset)
       ) {
         ret = { symbol, offset };
       }

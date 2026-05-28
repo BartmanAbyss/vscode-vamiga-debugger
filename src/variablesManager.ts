@@ -100,6 +100,8 @@ export class VariablesManager {
     } else if (id === 'locals') {
       const ctx = this.localsContextByRef.get(variableReference);
       return await this.localVariables(ctx?.pc ?? null, ctx?.regs ?? null);
+    } else if (id.startsWith('local_ptr:')) {
+      return this.localPtrVariables(id);
     } else if (id === "segments") {
       return this.segmentVariables();
     }
@@ -396,14 +398,32 @@ export class VariablesManager {
     const rawLocals = this.sourceMap.getLocalsForPc(effectivePc);
     const locals = await Promise.all(rawLocals.map(async (v) => {
       let value = '???';
+      let variablesReference = 0;
       const address = this.locationToAddress(v.location, cpuInfo, effectivePc, regs);
       if (address !== undefined) {
         try {
           if (v.byteSize === 4) {
-            const val = await this.vAmiga.peek32(address);
-            value = v.typeName.endsWith(' *') && this.vAmiga.isValidAddress(val)
-              ? formatAddress(val, this.sourceMap)
-              : formatNumber(val, 8);
+            const ptrVal = await this.vAmiga.peek32(address);
+            const isPtr = v.typeName.endsWith(' *') && this.vAmiga.isValidAddress(ptrVal);
+            const peerSize = v.pointeeByteSize;
+            if (isPtr && peerSize && [1, 2, 4].includes(peerSize)) {
+              let derefVal: number | undefined;
+              try {
+                if (peerSize === 4) derefVal = await this.vAmiga.peek32(ptrVal);
+                else if (peerSize === 2) derefVal = await this.vAmiga.peek16(ptrVal);
+                else derefVal = await this.vAmiga.peek8(ptrVal);
+              } catch { /* leave undefined */ }
+              const ptrStr = formatAddress(ptrVal, this.sourceMap);
+              if (derefVal !== undefined) {
+                const pointeeTypeName = v.typeName.slice(0, -2); // strip trailing ' *'
+                value = ptrStr + ' (' + formatNumber(derefVal, peerSize * 2) + ')';
+                variablesReference = this.variableHandles.create(`local_ptr:${pointeeTypeName}:${peerSize}:${derefVal}`);
+              } else {
+                value = ptrStr;
+              }
+            } else {
+              value = isPtr ? formatAddress(ptrVal, this.sourceMap) : formatNumber(ptrVal, 8);
+            }
           } else if (v.byteSize === 2) {
             const val = await this.vAmiga.peek16(address);
             value = formatNumber(val, 4);
@@ -419,7 +439,7 @@ export class VariablesManager {
         name: v.name,
         value,
         type: v.typeName,
-        variablesReference: 0,
+        variablesReference,
         presentationHint: { attributes: ["readOnly"] },
       };
     }));
@@ -429,6 +449,20 @@ export class VariablesManager {
     return locals;
   }
   
+  private localPtrVariables(id: string): DebugProtocol.Variable[] {
+    const parts = id.split(':');
+    const typeName = parts[1];
+    const size = Number(parts[2]);
+    const value = Number(parts[3]);
+    return [{
+      name: 'value',
+      value: formatNumber(value, size * 2),
+      type: typeName,
+      variablesReference: 0,
+      presentationHint: { attributes: ['readOnly'] },
+    }];
+  }
+
   public segmentVariables(): DebugProtocol.Variable[] {
     const segments = this.sourceMap.getSegmentsInfo();
     return segments.map((seg) => {

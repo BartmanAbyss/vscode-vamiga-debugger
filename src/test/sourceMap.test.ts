@@ -218,6 +218,27 @@ describe("SourceMap Tests", () => {
       assert.strictEqual(offset.symbol, "buffer");
       assert.strictEqual(offset.offset, 0x50);
     });
+
+    it("should prefer the nearest symbol when symbols are packed adjacently", () => {
+      // Simulates packed data variables: int (4 bytes) then short (2 bytes) then char (1 byte)
+      const packedMap = new SourceMap(
+        [{ name: "DATA", address: 0x2034, size: 0x10, memType: MemoryType.CHIP }],
+        testSources,
+        { global_int: 0x2034, global_short: 0x2038, global_char: 0x203a },
+        [],
+      );
+      // Exact match for global_short must not return global_int+4
+      const shortOffset = packedMap.findSymbolOffset(0x2038);
+      assert.ok(shortOffset);
+      assert.strictEqual(shortOffset.symbol, "global_short");
+      assert.strictEqual(shortOffset.offset, 0);
+
+      // Exact match for global_char must not return global_short+2 or global_int+6
+      const charOffset = packedMap.findSymbolOffset(0x203a);
+      assert.ok(charOffset);
+      assert.strictEqual(charOffset.symbol, "global_char");
+      assert.strictEqual(charOffset.offset, 0);
+    });
   });
 
   describe("Edge Cases", () => {

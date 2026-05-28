@@ -61,6 +61,77 @@ describe("VariablesManager - Comprehensive Tests", () => {
     });
   });
 
+  describe("Local Pointer Variables", () => {
+    const mockCpuBase: CpuInfo = {
+      pc: "0x1000", d0:"0", d1:"0", d2:"0", d3:"0", d4:"0", d5:"0", d6:"0", d7:"0",
+      a0:"0", a1:"0", a2:"0", a3:"0", a4:"0", a5:"0", a6:"0", a7:"0x8000",
+      sr:"0", usp:"0", msp:"0", isp:"0", vbr:"0", irc:"0", sfc:"0", dfc:"0", cacr:"0", caar:"0",
+    };
+
+    it("should show dereferenced value inline and create child handle for int*", async () => {
+      mockVAmiga.getCpuInfo.resolves(mockCpuBase);
+      mockVAmiga.isValidAddress.returns(true);
+      mockSourceMap.getLocalsForPc.returns([{
+        name: 'ptr', typeName: 'int *', byteSize: 4, pointeeByteSize: 4,
+        location: { kind: 'addr', address: 0x3000 },
+      }]);
+      mockVAmiga.peek32.withArgs(0x3000).resolves(0x00001234);  // pointer value
+      mockVAmiga.peek32.withArgs(0x00001234).resolves(0x22222222); // dereferenced value
+      mockSourceMap.findSymbolOffset.returns(undefined);
+      mockSourceMap.getCfaForPc.returns(undefined);
+
+      const scopes = variablesManager.getScopes(0x1000);
+      const localsRef = scopes[0].variablesReference;
+      const vars = await variablesManager.getVariables(localsRef);
+
+      assert.strictEqual(vars.length, 1);
+      assert.ok(vars[0].value.includes('0x22222222'), `Expected dereffed value in "${vars[0].value}"`);
+      assert.ok(vars[0].value.includes('(') && vars[0].value.includes(')'), `Expected parens in "${vars[0].value}"`);
+      assert.ok(vars[0].variablesReference !== 0, 'Expected non-zero variablesReference for pointer');
+
+      const children = await variablesManager.getVariables(vars[0].variablesReference);
+      assert.strictEqual(children.length, 1);
+      assert.strictEqual(children[0].name, 'value');
+      assert.strictEqual(children[0].type, 'int');
+      assert.ok(children[0].value.includes('22222222'));
+    });
+
+    it("should fall back to plain pointer display when pointeeByteSize is absent", async () => {
+      mockVAmiga.getCpuInfo.resolves(mockCpuBase);
+      mockVAmiga.isValidAddress.returns(true);
+      mockSourceMap.getLocalsForPc.returns([{
+        name: 'vp', typeName: 'void *', byteSize: 4,
+        location: { kind: 'addr', address: 0x4000 },
+      }]);
+      mockVAmiga.peek32.withArgs(0x4000).resolves(0x00005678);
+      mockSourceMap.findSymbolOffset.returns(undefined);
+
+      const scopes = variablesManager.getScopes(0x1000);
+      const localsRef = scopes[0].variablesReference;
+      const vars = await variablesManager.getVariables(localsRef);
+
+      assert.ok(!vars[0].value.includes('('), 'Expected no parens for void*');
+      assert.strictEqual(vars[0].variablesReference, 0, 'Expected no child handle for void*');
+    });
+
+    it("should not dereference when pointer value is not a valid address", async () => {
+      mockVAmiga.getCpuInfo.resolves(mockCpuBase);
+      mockVAmiga.isValidAddress.returns(false);
+      mockSourceMap.getLocalsForPc.returns([{
+        name: 'ptr', typeName: 'int *', byteSize: 4, pointeeByteSize: 4,
+        location: { kind: 'addr', address: 0x5000 },
+      }]);
+      mockVAmiga.peek32.withArgs(0x5000).resolves(0xDEADBEEF);
+
+      const scopes = variablesManager.getScopes(0x1000);
+      const localsRef = scopes[0].variablesReference;
+      const vars = await variablesManager.getVariables(localsRef);
+
+      assert.ok(!vars[0].value.includes('('), 'Expected no parens for invalid address');
+      assert.strictEqual(vars[0].variablesReference, 0);
+    });
+  });
+
   describe("CPU Register Variables", () => {
     it("should return all CPU register variables", async () => {
       const mockCpuInfo: CpuInfo = {
