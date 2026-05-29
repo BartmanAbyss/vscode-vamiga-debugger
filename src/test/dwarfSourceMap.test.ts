@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { ELFSectionHeader, parseDwarf } from '../dwarfParser';
 import { sourceMapFromDwarf } from '../dwarfSourceMap';
-import { FieldDescriptor, LocalVariable, SourceMap, TypeDescriptor } from '../sourceMap';
+import { FieldDescriptor, Variable, SourceMap, TypeDescriptor } from '../sourceMap';
 import * as path from 'path';
 
 function isSectionIncluded(header: ELFSectionHeader): boolean {
@@ -17,7 +17,7 @@ function loadSourceMap(fixture: string): SourceMap {
   return sourceMapFromDwarf(dwarf, offsets, '');
 }
 
-function getLocalsAtLine(sourceMap: SourceMap, line: number): LocalVariable[] {
+function getLocalsAtLine(sourceMap: SourceMap, line: number): Variable[] {
   const mainC = sourceMap.getSourceFiles().find(s => s.includes('simple_c.c'));
   expect(mainC).toBeDefined();
   const loc = sourceMap.lookupSourceLine(mainC!, line);

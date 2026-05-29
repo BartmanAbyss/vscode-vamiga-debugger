@@ -42,7 +42,7 @@ export interface FieldDescriptor {
   type: TypeDescriptor;
 }
 
-export interface LocalVariable {
+export interface Variable {
   name: string;
   typeName: string;
   byteSize: number;
@@ -53,7 +53,7 @@ export interface LocalVariable {
 export interface ScopeEntry {
   low: number;
   high: number;
-  vars: LocalVariable[];
+  vars: Variable[];
 }
 
 export interface Location {
@@ -90,7 +90,7 @@ export class SourceMap {
     private scopeTable: ScopeEntry[] = [],
     private debugFrame?: DebugFrame,
     private inlineTable: InlineEntry[] = [],
-    private globalVars: LocalVariable[] = [],
+    private globalVars: Variable[] = [],
   ) {
     for (const location of locations) {
       // Don't overwrite existing address mappings - first wins
@@ -113,7 +113,7 @@ export class SourceMap {
     }
   }
 
-  public getGlobalVariables(): LocalVariable[] {
+  public getGlobalVariables(): Variable[] {
     return this.globalVars;
   }
 
@@ -190,7 +190,7 @@ export class SourceMap {
       .map(e => e.frame);
   }
 
-  public getLocalsForPc(pc: number): LocalVariable[] {
+  public getLocalsForPc(pc: number): Variable[] {
     const table = this.scopeTable;
     if (table.length === 0) return [];
 
@@ -204,7 +204,7 @@ export class SourceMap {
     if (idx === -1) return [];
 
     // Scan backward collecting all scopes that contain pc.
-    const result: LocalVariable[] = [];
+    const result: Variable[] = [];
     for (let i = idx; i >= 0; i--) {
       if (table[i].high > pc) {
         result.push(...table[i].vars);

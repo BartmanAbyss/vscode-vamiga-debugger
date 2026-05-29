@@ -8,7 +8,7 @@ import {
   LineNumberInstruction,
   LineNumberProgram,
 } from "./dwarfParser";
-import { SourceMap, ScopeEntry, LocalVariable, LocalLocation, Location, Segment, InlineFrame, InlineEntry, TypeDescriptor, FieldDescriptor } from "./sourceMap";
+import { SourceMap, ScopeEntry, Variable, LocalLocation, Location, Segment, InlineFrame, InlineEntry, TypeDescriptor, FieldDescriptor } from "./sourceMap";
 import { DebugFrame } from "./dwarfParser";
 import { MemoryType } from "./amigaHunkParser";
 
@@ -483,7 +483,7 @@ function dieToLocalVar(
   relocate: (addr: number) => number | undefined,
   addressSize: number,
   frameBase: 'cfa' | 'other' = 'other',
-): LocalVariable {
+): Variable {
   const name = findAttribute(die, DW_AT.name)?.value as string | undefined ?? '???';
   const typeDie = getTypeDie(die);
   const typeName = typeDie ? typeNameFromDie(typeDie) : '<unknown>';
@@ -542,8 +542,8 @@ function buildScopeTable(
 function buildGlobalsTable(
   dwarfData: DWARFData,
   relocate: (addr: number) => number | undefined,
-): LocalVariable[] {
-  const globals: LocalVariable[] = [];
+): Variable[] {
+  const globals: Variable[] = [];
   for (const cu of dwarfData.compilationUnits) {
     const root = cu.dies[0];
     if (!root) continue;
