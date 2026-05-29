@@ -81,6 +81,7 @@ export interface SymbolOffset {
 export class SourceMap {
   private locationsBySource = new Map<string, Map<number, Location>>();
   private locationsByAddress = new Map<number, Location>();
+  private sortedAddresses: number[] = [];
 
   constructor(
     private segments: Segment[],
@@ -111,6 +112,7 @@ export class SourceMap {
       }
       this.locationsBySource.set(pathKey, linesMap);
     }
+    this.sortedAddresses = Array.from(this.locationsByAddress.keys()).sort((a, b) => a - b);
   }
 
   public getGlobalVariables(): Variable[] {
@@ -130,14 +132,25 @@ export class SourceMap {
   }
 
   public lookupAddress(address: number): Location | undefined {
-    let location = this.locationsByAddress.get(address);
-    if (!location) {
-      for (const [a, l] of this.locationsByAddress.entries()) {
-        if (a > address) break;
-        if (address - a <= 10) location = l;
-      }
+    const exact = this.locationsByAddress.get(address);
+    if (exact) return exact;
+
+    // Binary floor search: find the largest line-table address ≤ queried address.
+    // Guards against addresses outside any loaded segment (e.g. arbitrary memory reads).
+    const arr = this.sortedAddresses;
+    let lo = 0, hi = arr.length - 1, floorIdx = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1;
+      if (arr[mid] <= address) { floorIdx = mid; lo = mid + 1; }
+      else { hi = mid - 1; }
     }
-    return location;
+    if (floorIdx === -1) return undefined;
+    const floorAddr = arr[floorIdx];
+    if (this.findSegmentForAddress(address) !== undefined &&
+        this.findSegmentForAddress(address) === this.findSegmentForAddress(floorAddr)) {
+      return this.locationsByAddress.get(floorAddr);
+    }
+    return undefined;
   }
 
   public lookupSourceLine(path: string, line: number): Location {

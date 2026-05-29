@@ -106,13 +106,14 @@ describe("SourceMap Tests", () => {
       assert.strictEqual(location.line, 10);
     });
 
-    it("should not find address beyond 10 byte range", () => {
-      const location = sourceMap.lookupAddress(0x1015); // 21 bytes from 0x1000, 11 bytes from 0x1020 - both out of range
-      // Based on the algorithm, this should not find anything since both are > 10 bytes away
-      assert.strictEqual(location, undefined);
+    it("should find address far from line table entry (mid-statement floor search)", () => {
+      const location = sourceMap.lookupAddress(0x1015); // Between 0x1000 and 0x1020 — a C statement spanning many instructions
+      assert.ok(location);
+      assert.strictEqual(location.address, 0x1000);
+      assert.strictEqual(location.line, 10);
     });
 
-    it("should return undefined for non-existent address", () => {
+    it("should return undefined for address outside any loaded segment", () => {
       const location = sourceMap.lookupAddress(0x5000);
       assert.strictEqual(location, undefined);
     });

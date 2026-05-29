@@ -5,24 +5,86 @@ simple_c.elf:     file format elf32-m68k
 Disassembly of section .text:
 
 00000000 <_start>:
-   0:	598f           	subq.l #4,sp
-   2:	2f0a           	move.l a2,-(sp)
-   4:	2f7c 0000 2048 	move.l #8264,4(sp)
-   a:	0004 
-   c:	206f 0004      	movea.l 4(sp),a0
-  10:	2450           	movea.l (a0),a2
-  12:	4879 0000 2048 	pea 2048 <globals>
-  18:	4eb9 0000 0038 	jsr 38 <_Z6func_aRK6Struct>
-  1e:	588f           	addq.l #4,sp
-  20:	2480           	move.l d0,(a2)
-  22:	206f 0004      	movea.l 4(sp),a0
-  26:	317c 8888 0004 	move.w #-30584,4(a0)
-  2c:	206f 0004      	movea.l 4(sp),a0
-  30:	117c 0077 0006 	move.b #119,6(a0)
-  36:	60fe           	bra.s 36 <_start+0x36>
+   0:	518f           	subq.l #8,sp
+   2:	203c 0000 20fb 	move.l #8443,d0
+   8:	0480 0000 20fb 	subi.l #8443,d0
+   e:	e480           	asr.l #2,d0
+  10:	2e80           	move.l d0,(sp)
+  12:	42af 0004      	clr.l 4(sp)
+  16:	601a           	bra.s 32 <_start+0x32>
+  18:	202f 0004      	move.l 4(sp),d0
+  1c:	d080           	add.l d0,d0
+  1e:	2240           	movea.l d0,a1
+  20:	d3c0           	adda.l d0,a1
+  22:	41f9 0000 20fb 	lea 20fb <__preinit_array_end>,a0
+  28:	2071 8800      	movea.l (0,a1,a0.l),a0
+  2c:	4e90           	jsr (a0)
+  2e:	52af 0004      	addq.l #1,4(sp)
+  32:	202f 0004      	move.l 4(sp),d0
+  36:	b097           	cmp.l (sp),d0
+  38:	65de           	bcs.s 18 <_start+0x18>
+  3a:	203c 0000 2100 	move.l #8448,d0
+  40:	0480 0000 20fc 	subi.l #8444,d0
+  46:	e480           	asr.l #2,d0
+  48:	2e80           	move.l d0,(sp)
+  4a:	42af 0004      	clr.l 4(sp)
+  4e:	601a           	bra.s 6a <_start+0x6a>
+  50:	202f 0004      	move.l 4(sp),d0
+  54:	d080           	add.l d0,d0
+  56:	2240           	movea.l d0,a1
+  58:	d3c0           	adda.l d0,a1
+  5a:	41f9 0000 20fc 	lea 20fc <__init_array_start>,a0
+  60:	2071 8800      	movea.l (0,a1,a0.l),a0
+  64:	4e90           	jsr (a0)
+  66:	52af 0004      	addq.l #1,4(sp)
+  6a:	202f 0004      	move.l 4(sp),d0
+  6e:	b097           	cmp.l (sp),d0
+  70:	65de           	bcs.s 50 <_start+0x50>
+  72:	4eb9 0000 00c2 	jsr c2 <main>
+  78:	203c 0000 2100 	move.l #8448,d0
+  7e:	0480 0000 2100 	subi.l #8448,d0
+  84:	e480           	asr.l #2,d0
+  86:	2e80           	move.l d0,(sp)
+  88:	2f57 0004      	move.l (sp),4(sp)
+  8c:	601c           	bra.s aa <_start+0xaa>
+  8e:	202f 0004      	move.l 4(sp),d0
+  92:	5380           	subq.l #1,d0
+  94:	d080           	add.l d0,d0
+  96:	2240           	movea.l d0,a1
+  98:	d3c0           	adda.l d0,a1
+  9a:	41f9 0000 2100 	lea 2100 <hello>,a0
+  a0:	2071 8800      	movea.l (0,a1,a0.l),a0
+  a4:	4e90           	jsr (a0)
+  a6:	53af 0004      	subq.l #1,4(sp)
+  aa:	4aaf 0004      	tst.l 4(sp)
+  ae:	66de           	bne.s 8e <_start+0x8e>
+  b0:	4e71           	nop
+  b2:	4e71           	nop
+  b4:	508f           	addq.l #8,sp
+  b6:	4e75           	rts
 
-00000038 <_Z6func_aRK6Struct>:
-  38:	206f 0004      	movea.l 4(sp),a0
-  3c:	2050           	movea.l (a0),a0
-  3e:	2010           	move.l (a0),d0
-  40:	4e75           	rts
+000000b8 <_ZNKL5colorMUlvE_clEv>:
+  b8:	207c 00df f180 	movea.l #14676352,a0
+  be:	3010           	move.w (a0),d0
+  c0:	4e75           	rts
+
+000000c2 <main>:
+  c2:	2039 0000 2100 	move.l 2100 <hello>,d0
+  c8:	23c0 0000 2104 	move.l d0,2104 <cstr>
+  ce:	60fe           	bra.s ce <main+0xc>
+
+000000d0 <_Z41__static_initialization_and_destruction_0v>:
+  d0:	598f           	subq.l #4,sp
+  d2:	200f           	move.l sp,d0
+  d4:	5680           	addq.l #3,d0
+  d6:	2f00           	move.l d0,-(sp)
+  d8:	4eb9 0000 00b8 	jsr b8 <_ZNKL5colorMUlvE_clEv>
+  de:	588f           	addq.l #4,sp
+  e0:	33c0 0000 2108 	move.w d0,2108 <_ZL5color>
+  e6:	4e71           	nop
+  e8:	588f           	addq.l #4,sp
+  ea:	4e75           	rts
+
+000000ec <_GLOBAL__sub_I_hello>:
+  ec:	4eb9 0000 00d0 	jsr d0 <_Z41__static_initialization_and_destruction_0v>
+  f2:	4e75           	rts

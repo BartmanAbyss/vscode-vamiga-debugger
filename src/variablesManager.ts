@@ -42,6 +42,7 @@ export class VariablesManager {
   private structPtrByRef = new Map<number, { ptrAddress: number; getFields: () => FieldDescriptor[] }>();
   private arrayByRef = new Map<number, { baseAddress: number; elementCount: number; elementType: TypeDescriptor; rangeStart: number; rangeEnd: number }>();
   private static readonly ARRAY_PAGE_SIZE = 100;
+  private static readonly MAX_STRING_PEEK = 256;
 
   /**
    * Creates a new VariablesManager instance.
@@ -445,6 +446,22 @@ export class VariablesManager {
     return val !== undefined ? formatNumber(val, byteSize * 2) : '???';
   }
 
+  private async peekString(address: number): Promise<{ content: string; truncated: boolean }> {
+    const chars: string[] = [];
+    for (let i = 0; i < VariablesManager.MAX_STRING_PEEK; i++) {
+      const byte = await this.vAmiga.peek8(address + i);
+      if (byte === undefined || byte === 0) break;
+      if (byte === 0x5c)                           chars.push('\\\\');
+      else if (byte === 0x22)                      chars.push('\\"');
+      else if (byte === 0x0a)                      chars.push('\\n');
+      else if (byte === 0x0d)                      chars.push('\\r');
+      else if (byte === 0x09)                      chars.push('\\t');
+      else if (byte >= 0x20 && byte <= 0x7e)       chars.push(String.fromCharCode(byte));
+      else                                          chars.push(`\\x${byte.toString(16).padStart(2, '0')}`);
+    }
+    return { content: chars.join(''), truncated: chars.length === VariablesManager.MAX_STRING_PEEK };
+  }
+
   public async localVariables(pc: number | null = null, regs: Map<number, number> | null = null): Promise<DebugProtocol.Variable[]> {
     const cpuInfo = await this.vAmiga.getCpuInfo();
     const effectivePc = pc ?? Number(cpuInfo.pc);
@@ -501,6 +518,11 @@ export class VariablesManager {
           return { value: ptrStr, variablesReference: ref };
         }
         if (pointee.kind === 'primitive' && [1, 2, 4].includes(pointee.byteSize)) {
+          if (pointee.byteSize === 1 && ['char', 'unsigned char', 'signed char'].includes(pointee.typeName)) {
+            const str = await this.peekString(ptrVal);
+            const quoted = str.truncated ? `"${str.content}..."` : `"${str.content}"`;
+            return { value: `${ptrStr} ${quoted}`, variablesReference: 0 };
+          }
           let derefVal: number | undefined;
           try { derefVal = await this.peekBySize(ptrVal, pointee.byteSize); } catch { /* leave undefined */ }
           if (derefVal !== undefined) {

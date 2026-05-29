@@ -422,12 +422,19 @@ describe("StackManager - Comprehensive Tests", () => {
       assert.strictEqual(frames[1].instructionPointerReference, "0x00002000");
     });
 
-    it("should insert synthetic inline frames before the real frame", async () => {
+    it("should insert synthetic inline frames before the real frame (DWARF path only)", async () => {
       const mockCpuInfo = createMockCpuInfo({ pc: "0x1000", a7: "0x8000" });
       mockVAmiga.getCpuInfo.resolves(mockCpuInfo);
-      sinon.stub(stackManager, "guessStack").resolves([[0x1000, 0x1000]]);
+      mockVAmiga.isValidAddress.returns(true);
 
-      // Real frame has a source location
+      // DWARF CFA at 0x1000: SP+4 → CFA=0x8004, return address at mem[0x8000]=0x2000
+      mockSourceMap.getCfaForPc.withArgs(0x1000).returns({ reg: 15, offset: 4 });
+      const retBuf = Buffer.alloc(4); retBuf.writeUInt32BE(0x2000, 0);
+      mockVAmiga.readMemory.withArgs(0x8000, 4).resolves(retBuf);
+      // No DWARF info at 0x2000 → unwind stops
+      mockSourceMap.lookupAddress.withArgs(0x2000).returns(null);
+
+      // Real frame 0x1000 has a source location
       mockSourceMap.lookupAddress.withArgs(0x1000).returns({ path: "/src/outer.c", line: 10 });
       // One inline function wraps the code at 0x1000, called from line 20
       mockSourceMap.getInlineFramesForPc.withArgs(0x1000).returns([
@@ -436,13 +443,13 @@ describe("StackManager - Comprehensive Tests", () => {
 
       const frames = await stackManager.getStackFrames(0, 10);
 
-      // Two frames: synthetic inline (innermost) + real outer
-      assert.strictEqual(frames.length, 2);
+      // inline frame + real outer (0x1000) + no-source frame (0x2000)
+      assert.strictEqual(frames.length, 3);
       // Inline frame: name = function name, location = raw PC location (lookupAddress)
       assert.strictEqual(frames[0].name, "inline_func (inline)");
       assert.strictEqual(frames[0].line, 10);
       assert.strictEqual(frames[0].instructionPointerReference, "0x00001000");
-      // Real frame: location overridden to call site
+      // Real frame: location overridden to call site of the inline
       assert.strictEqual(frames[1].line, 20);
       assert.strictEqual(frames[1].instructionPointerReference, "0x00001000");
     });

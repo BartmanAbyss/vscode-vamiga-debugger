@@ -55,29 +55,30 @@ export class StackManager {
       }
     }
 
-    const dwCfa = this.sourceMap?.getCfaForPc?.(pc);
-    let addressPairs: [number, number][];
-    let regSnapshots: (Map<number, number> | undefined)[];
-    if (dwCfa !== undefined) {
-      const result = await this.dwarfUnwindStack(pc, stackAddress, cpuInfo, endFrame);
-      addressPairs = result.addresses;
-      regSnapshots = result.snapshots;
+    if (this.sourceMap?.getCfaForPc?.(pc) !== undefined) {
+      return this.buildDwarfFrames(pc, stackAddress, cpuInfo, startFrame, endFrame);
     } else {
-      addressPairs = await this.guessStack(pc, stackAddress, endFrame);
-      regSnapshots = new Array(addressPairs.length).fill(undefined);
+      return this.buildGuessFrames(pc, stackAddress, startFrame, endFrame);
     }
+  }
 
+  // Builds stack frames using DWARF .debug_frame unwinding.
+  // Expands inline frames and records register snapshots per frame.
+  private async buildDwarfFrames(
+    pc: number,
+    stackAddress: number,
+    cpuInfo: CpuInfo,
+    startFrame: number,
+    endFrame: number,
+  ): Promise<StackFrame[]> {
+    const { addresses, snapshots } = await this.dwarfUnwindStack(pc, stackAddress, cpuInfo, endFrame);
     this.lastFrameRegs.clear();
-    let foundSource = false;
-
-    // Build the full ordered frame list (inline synthetic frames + real frames),
-    // then slice for pagination. frameId is a running counter across all entries.
     const allFrames: StackFrame[] = [];
     let frameId = 0;
 
-    outer: for (let addrIdx = 0; addrIdx < addressPairs.length; addrIdx++) {
-      const [addr] = addressPairs[addrIdx];
-      const snapshot = regSnapshots[addrIdx];
+    for (let addrIdx = 0; addrIdx < addresses.length; addrIdx++) {
+      const [addr] = addresses[addrIdx];
+      const snapshot = snapshots[addrIdx];
       const inlines = this.sourceMap?.getInlineFramesForPc?.(addr) ?? [];
 
       // Synthetic inline frames — innermost (deepest nesting) first.
@@ -95,28 +96,58 @@ export class StackManager {
         allFrames.push(f);
         if (snapshot) this.lastFrameRegs.set(frameId, snapshot);
         frameId++;
-        foundSource = foundSource || inlineLoc !== undefined;
       }
 
       // Real frame. If there are inlines, override its location with the outermost
       // inline's call site (where that inline was invoked in this function).
-      const realLoc = inlines.length > 0
+      const loc = inlines.length > 0
         ? { path: inlines[inlines.length - 1].callPath, line: inlines[inlines.length - 1].callLine }
         : this.sourceMap?.lookupAddress(addr);
 
-      if (realLoc) {
-        const f = new StackFrame(frameId, formatAddress(addr, this.sourceMap), new Source(basename(realLoc.path), realLoc.path), realLoc.line);
+      if (loc) {
+        const f = new StackFrame(frameId, formatAddress(addr, this.sourceMap), new Source(basename(loc.path), loc.path), loc.line);
         f.instructionPointerReference = formatHex(addr);
         allFrames.push(f);
         if (snapshot) this.lastFrameRegs.set(frameId, snapshot);
+      } else {
+        const f = new StackFrame(frameId, formatAddress(addr, this.sourceMap));
+        f.instructionPointerReference = formatHex(addr);
+        allFrames.push(f);
+        if (snapshot) this.lastFrameRegs.set(frameId, snapshot);
+      }
+      frameId++;
+    }
+
+    return allFrames.slice(startFrame, endFrame);
+  }
+
+  // Builds stack frames by heuristic guessing (no DWARF info available).
+  // No inline frames, no register snapshots.
+  private async buildGuessFrames(
+    pc: number,
+    stackAddress: number,
+    startFrame: number,
+    endFrame: number,
+  ): Promise<StackFrame[]> {
+    const addresses = await this.guessStack(pc, stackAddress, endFrame);
+    this.lastFrameRegs.clear();
+    const allFrames: StackFrame[] = [];
+    let frameId = 0;
+    let foundSource = false;
+
+    for (const [addr] of addresses) {
+      const loc = this.sourceMap?.lookupAddress(addr);
+      if (loc) {
+        const f = new StackFrame(frameId, formatAddress(addr, this.sourceMap), new Source(basename(loc.path), loc.path), loc.line);
+        f.instructionPointerReference = formatHex(addr);
+        allFrames.push(f);
         frameId++;
         foundSource = true;
       } else {
-        if (foundSource && addr > 0x00e00000 && addr < 0x01000000) break outer;
+        if (foundSource && addr > 0x00e00000 && addr < 0x01000000) break;
         const f = new StackFrame(frameId, formatHex(addr));
         f.instructionPointerReference = formatHex(addr);
         allFrames.push(f);
-        if (snapshot) this.lastFrameRegs.set(frameId, snapshot);
         frameId++;
       }
     }

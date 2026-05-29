@@ -315,6 +315,58 @@ describe("VariablesManager - Comprehensive Tests", () => {
       const charField = fields.find(f => f.name === '_char');
       assert.ok(charField!.value.includes('77'));
     });
+
+    it("should display char* as a quoted string inline", async () => {
+      const PTR_ADDR = 0x7000;
+      const STR_ADDR = 0x0000A1B0;
+      mockVAmiga.getCpuInfo.resolves(mockCpuBase);
+      mockVAmiga.isValidAddress.returns(true);
+      mockSourceMap.getLocalsForPc.returns([{
+        name: 'hello', typeName: 'const char *', byteSize: 4,
+        location: { kind: 'addr', address: PTR_ADDR },
+        typeDescriptor: { kind: 'pointer', typeName: 'const char *', byteSize: 4,
+                          pointee: { kind: 'primitive', typeName: 'char', byteSize: 1 } },
+      }]);
+      mockVAmiga.peek32.withArgs(PTR_ADDR).resolves(STR_ADDR);
+      mockSourceMap.findSymbolOffset.returns(undefined);
+      // Spell out "hello!" then null terminator
+      const str = 'hello!';
+      for (let i = 0; i < str.length; i++)
+        mockVAmiga.peek8.withArgs(STR_ADDR + i).resolves(str.charCodeAt(i));
+      mockVAmiga.peek8.withArgs(STR_ADDR + str.length).resolves(0);
+
+      const scopes = variablesManager.getScopes(0x1000);
+      const localsRef = scopes[0].variablesReference;
+      const vars = await variablesManager.getVariables(localsRef);
+
+      assert.strictEqual(vars.length, 1);
+      assert.ok(vars[0].value.includes('"hello!"'), `Expected quoted string in "${vars[0].value}"`);
+      assert.strictEqual(vars[0].variablesReference, 0, 'Expected no child handle for string');
+    });
+
+    it("should truncate char* display at 256 bytes", async () => {
+      const PTR_ADDR = 0x7100;
+      const STR_ADDR = 0x0000B000;
+      mockVAmiga.getCpuInfo.resolves(mockCpuBase);
+      mockVAmiga.isValidAddress.returns(true);
+      mockSourceMap.getLocalsForPc.returns([{
+        name: 'longstr', typeName: 'char *', byteSize: 4,
+        location: { kind: 'addr', address: PTR_ADDR },
+        typeDescriptor: { kind: 'pointer', typeName: 'char *', byteSize: 4,
+                          pointee: { kind: 'primitive', typeName: 'char', byteSize: 1 } },
+      }]);
+      mockVAmiga.peek32.withArgs(PTR_ADDR).resolves(STR_ADDR);
+      mockSourceMap.findSymbolOffset.returns(undefined);
+      // All 256 bytes are 'A' — no null terminator within the limit
+      for (let i = 0; i < 256; i++)
+        mockVAmiga.peek8.withArgs(STR_ADDR + i).resolves(0x41); // 'A'
+
+      const scopes = variablesManager.getScopes(0x1000);
+      const localsRef = scopes[0].variablesReference;
+      const vars = await variablesManager.getVariables(localsRef);
+
+      assert.ok(vars[0].value.endsWith('..."'), `Expected truncation ellipsis in "${vars[0].value}"`);
+    });
   });
 
   describe("Local Array Variables", () => {
