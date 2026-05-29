@@ -6,12 +6,23 @@ Disassembly of section .text:
 
 00000000 <_start>:
    0:	598f           	subq.l #4,sp
-   2:	2ebc 0000 2028 	move.l #8232,(sp)
-   8:	2057           	movea.l (sp),a0
-   a:	2050           	movea.l (a0),a0
-   c:	20bc 9999 9999 	move.l #-1717986919,(a0)
-  12:	2057           	movea.l (sp),a0
-  14:	317c 8888 0004 	move.w #-30584,4(a0)
-  1a:	2057           	movea.l (sp),a0
-  1c:	117c 0077 0006 	move.b #119,6(a0)
-  22:	60fe           	bra.s 22 <_start+0x22>
+   2:	2f0a           	move.l a2,-(sp)
+   4:	2f7c 0000 2048 	move.l #8264,4(sp)
+   a:	0004 
+   c:	206f 0004      	movea.l 4(sp),a0
+  10:	2450           	movea.l (a0),a2
+  12:	4879 0000 2048 	pea 2048 <globals>
+  18:	4eb9 0000 0038 	jsr 38 <_Z6func_aRK6Struct>
+  1e:	588f           	addq.l #4,sp
+  20:	2480           	move.l d0,(a2)
+  22:	206f 0004      	movea.l 4(sp),a0
+  26:	317c 8888 0004 	move.w #-30584,4(a0)
+  2c:	206f 0004      	movea.l 4(sp),a0
+  30:	117c 0077 0006 	move.b #119,6(a0)
+  36:	60fe           	bra.s 36 <_start+0x36>
+
+00000038 <_Z6func_aRK6Struct>:
+  38:	206f 0004      	movea.l 4(sp),a0
+  3c:	2050           	movea.l (a0),a0
+  3e:	2010           	move.l (a0),d0
+  40:	4e75           	rts

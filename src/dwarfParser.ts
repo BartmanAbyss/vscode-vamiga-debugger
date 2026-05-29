@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { demangle } from "./demangle";
+
 // ELF and DWARF type definitions
 export enum ELFSectionFlags {
   WRITE = 0x1,
@@ -1544,6 +1546,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
 
       // Only include meaningful symbols (skip null symbol at index 0)
       if (i > 0 && name.length > 0) {
+        name = demangle(name);
         elfSymbols.push({
           name,
           value,
