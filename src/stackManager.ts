@@ -16,6 +16,12 @@ import { SourceMap } from "./sourceMap";
 export class StackManager {
   private lastFrameRegs = new Map<number, Map<number, number>>();
 
+ /**
+   * Creates a new StackManager instance.
+   *
+   * @param vAmiga VAmiga instance for reading CPU state and memory
+   * @param sourceMap Source map for resolving addresses to source locations
+   */
   constructor(
     private vAmiga: VAmiga,
     private sourceMap: SourceMap,

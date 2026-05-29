@@ -138,7 +138,7 @@ export interface SourceMapEntry {
 }
 
 export interface CfaInstruction {
-  op: string;
+  op: number;
   reg?: number;
   reg2?: number;
   offset?: number;
@@ -501,6 +501,50 @@ export const DW_OP = {
   breg31: 0x8f,
   fbreg: 0x91,
   call_frame_cfa: 0x9c,
+} as const;
+
+export const DW_LNS = {
+  copy:             1,
+  advance_pc:       2,
+  advance_line:     3,
+  set_file:         4,
+  set_column:       5,
+  negate_stmt:      6,
+  set_basic_block:  7,
+  const_add_pc:     8,
+  fixed_advance_pc: 9,
+} as const;
+
+export const DW_LNE = {
+  end_sequence: 1,
+  set_address:  2,
+  define_file:  3,
+} as const;
+
+export const DW_CFA = {
+  advance_loc:        0x40,  // high 2 bits = 01; low 6 bits carry the delta
+  offset:             0x80,  // high 2 bits = 10; low 6 bits carry the register
+  restore:            0xC0,  // high 2 bits = 11; low 6 bits carry the register
+  nop:                0x00,
+  set_loc:            0x01,
+  advance_loc1:       0x02,
+  advance_loc2:       0x03,
+  advance_loc4:       0x04,
+  offset_extended:    0x05,
+  restore_extended:   0x06,
+  undefined:          0x07,
+  same_value:         0x08,
+  register:           0x09,
+  remember_state:     0x0a,
+  restore_state:      0x0b,
+  def_cfa:            0x0c,
+  def_cfa_register:   0x0d,
+  def_cfa_offset:     0x0e,
+  def_cfa_expression: 0x0f,
+  expression:         0x10,
+  offset_extended_sf: 0x11,
+  def_cfa_sf:         0x12,
+  def_cfa_offset_sf:  0x13,
 } as const;
 
 /**
@@ -1194,10 +1238,10 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
       instruction.type = "extended";
 
       switch (extOpcode) {
-        case 1:
+        case DW_LNE.end_sequence:
           instruction.name = "end_sequence";
           break;
-        case 2: {
+        case DW_LNE.set_address: {
           const address = is64bit
             ? readUInt64(offset + size)
             : readUInt32(offset + size);
@@ -1206,7 +1250,7 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
           size += is64bit ? 8 : 4;
           break;
         }
-        case 3: {
+        case DW_LNE.define_file: {
           const fileName = readString(offset + size);
           size += fileName.size;
           instruction.name = "define_file";
@@ -1218,47 +1262,47 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
       instruction.type = "standard";
 
       switch (opcode) {
-        case 1:
+        case DW_LNS.copy:
           instruction.name = "copy";
           break;
-        case 2: {
+        case DW_LNS.advance_pc: {
           const advance = readULEB128(offset + 1);
           instruction.name = "advance_pc";
           instruction.advance = advance.value;
           size += advance.size;
           break;
         }
-        case 3: {
+        case DW_LNS.advance_line: {
           const lineAdvance = readSLEB128(offset + 1);
           instruction.name = "advance_line";
           instruction.advance = lineAdvance.value;
           size += lineAdvance.size;
           break;
         }
-        case 4: {
+        case DW_LNS.set_file: {
           const file = readULEB128(offset + 1);
           instruction.name = "set_file";
           instruction.file = file.value;
           size += file.size;
           break;
         }
-        case 5: {
+        case DW_LNS.set_column: {
           const column = readULEB128(offset + 1);
           instruction.name = "set_column";
           instruction.column = column.value;
           size += column.size;
           break;
         }
-        case 6:
+        case DW_LNS.negate_stmt:
           instruction.name = "negate_stmt";
           break;
-        case 7:
+        case DW_LNS.set_basic_block:
           instruction.name = "set_basic_block";
           break;
-        case 8:
+        case DW_LNS.const_add_pc:
           instruction.name = "const_add_pc";
           break;
-        case 9: {
+        case DW_LNS.fixed_advance_pc: {
           const fixedAdvance = readUInt16(offset + 1);
           instruction.name = "fixed_advance_pc";
           instruction.advance = fixedAdvance;
@@ -1565,38 +1609,37 @@ export function parseDwarf(elfBuffer: Buffer): DWARFData {
     let offset = startOffset;
     while (offset < endOffset) {
       const byte = readUInt8(offset++);
-      const high2 = (byte & 0xc0) >> 6;
-      const low6  = byte & 0x3f;
-      if (high2 === 1) {
-        instructions.push({ op: 'DW_CFA_advance_loc', delta: low6 });
-      } else if (high2 === 2) {
+      const low6 = byte & 0x3f;
+      if ((byte & 0xC0) === DW_CFA.advance_loc) {
+        instructions.push({ op: DW_CFA.advance_loc, delta: low6 });
+      } else if ((byte & 0xC0) === DW_CFA.offset) {
         const f = readULEB128(offset); offset += f.size;
-        instructions.push({ op: 'DW_CFA_offset', reg: low6, factoredOffset: f.value });
-      } else if (high2 === 3) {
-        instructions.push({ op: 'DW_CFA_restore', reg: low6 });
+        instructions.push({ op: DW_CFA.offset, reg: low6, factoredOffset: f.value });
+      } else if ((byte & 0xC0) === DW_CFA.restore) {
+        instructions.push({ op: DW_CFA.restore, reg: low6 });
       } else {
         switch (byte) {
-          case 0x00: instructions.push({ op: 'DW_CFA_nop' }); break;
-          case 0x01: { const a = addressSize === 8 ? readUInt64(offset) : readUInt32(offset); offset += addressSize; instructions.push({ op: 'DW_CFA_set_loc', address: a }); break; }
-          case 0x02: { instructions.push({ op: 'DW_CFA_advance_loc1', delta: readUInt8(offset) }); offset += 1; break; }
-          case 0x03: { instructions.push({ op: 'DW_CFA_advance_loc2', delta: readUInt16(offset) }); offset += 2; break; }
-          case 0x04: { instructions.push({ op: 'DW_CFA_advance_loc4', delta: readUInt32(offset) }); offset += 4; break; }
-          case 0x05: { const r = readULEB128(offset); offset += r.size; const f = readULEB128(offset); offset += f.size; instructions.push({ op: 'DW_CFA_offset_extended', reg: r.value, factoredOffset: f.value }); break; }
-          case 0x06: { const r = readULEB128(offset); offset += r.size; instructions.push({ op: 'DW_CFA_restore_extended', reg: r.value }); break; }
-          case 0x07: { const r = readULEB128(offset); offset += r.size; instructions.push({ op: 'DW_CFA_undefined', reg: r.value }); break; }
-          case 0x08: { const r = readULEB128(offset); offset += r.size; instructions.push({ op: 'DW_CFA_same_value', reg: r.value }); break; }
-          case 0x09: { const r1 = readULEB128(offset); offset += r1.size; const r2 = readULEB128(offset); offset += r2.size; instructions.push({ op: 'DW_CFA_register', reg: r1.value, reg2: r2.value }); break; }
-          case 0x0a: instructions.push({ op: 'DW_CFA_remember_state' }); break;
-          case 0x0b: instructions.push({ op: 'DW_CFA_restore_state' }); break;
-          case 0x0c: { const r = readULEB128(offset); offset += r.size; const o = readULEB128(offset); offset += o.size; instructions.push({ op: 'DW_CFA_def_cfa', reg: r.value, offset: o.value }); break; }
-          case 0x0d: { const r = readULEB128(offset); offset += r.size; instructions.push({ op: 'DW_CFA_def_cfa_register', reg: r.value }); break; }
-          case 0x0e: { const o = readULEB128(offset); offset += o.size; instructions.push({ op: 'DW_CFA_def_cfa_offset', offset: o.value }); break; }
-          case 0x0f: { const len = readULEB128(offset); offset += len.size + len.value; instructions.push({ op: 'DW_CFA_def_cfa_expression' }); break; }
-          case 0x10: { const r = readULEB128(offset); offset += r.size; const len = readULEB128(offset); offset += len.size + len.value; instructions.push({ op: 'DW_CFA_expression', reg: r.value }); break; }
-          case 0x11: { const r = readULEB128(offset); offset += r.size; const o = readSLEB128(offset); offset += o.size; instructions.push({ op: 'DW_CFA_offset_extended_sf', reg: r.value, factoredOffset: o.value }); break; }
-          case 0x12: { const r = readULEB128(offset); offset += r.size; const o = readSLEB128(offset); offset += o.size; instructions.push({ op: 'DW_CFA_def_cfa_sf', reg: r.value, factoredOffset: o.value }); break; }
-          case 0x13: { const o = readSLEB128(offset); offset += o.size; instructions.push({ op: 'DW_CFA_def_cfa_offset_sf', factoredOffset: o.value }); break; }
-          default: instructions.push({ op: `DW_CFA_unknown_0x${byte.toString(16)}` }); break;
+          case DW_CFA.nop: instructions.push({ op: DW_CFA.nop }); break;
+          case DW_CFA.set_loc: { const a = addressSize === 8 ? readUInt64(offset) : readUInt32(offset); offset += addressSize; instructions.push({ op: DW_CFA.set_loc, address: a }); break; }
+          case DW_CFA.advance_loc1: { instructions.push({ op: DW_CFA.advance_loc1, delta: readUInt8(offset) }); offset += 1; break; }
+          case DW_CFA.advance_loc2: { instructions.push({ op: DW_CFA.advance_loc2, delta: readUInt16(offset) }); offset += 2; break; }
+          case DW_CFA.advance_loc4: { instructions.push({ op: DW_CFA.advance_loc4, delta: readUInt32(offset) }); offset += 4; break; }
+          case DW_CFA.offset_extended: { const r = readULEB128(offset); offset += r.size; const f = readULEB128(offset); offset += f.size; instructions.push({ op: DW_CFA.offset_extended, reg: r.value, factoredOffset: f.value }); break; }
+          case DW_CFA.restore_extended: { const r = readULEB128(offset); offset += r.size; instructions.push({ op: DW_CFA.restore_extended, reg: r.value }); break; }
+          case DW_CFA.undefined: { const r = readULEB128(offset); offset += r.size; instructions.push({ op: DW_CFA.undefined, reg: r.value }); break; }
+          case DW_CFA.same_value: { const r = readULEB128(offset); offset += r.size; instructions.push({ op: DW_CFA.same_value, reg: r.value }); break; }
+          case DW_CFA.register: { const r1 = readULEB128(offset); offset += r1.size; const r2 = readULEB128(offset); offset += r2.size; instructions.push({ op: DW_CFA.register, reg: r1.value, reg2: r2.value }); break; }
+          case DW_CFA.remember_state: instructions.push({ op: DW_CFA.remember_state }); break;
+          case DW_CFA.restore_state: instructions.push({ op: DW_CFA.restore_state }); break;
+          case DW_CFA.def_cfa: { const r = readULEB128(offset); offset += r.size; const o = readULEB128(offset); offset += o.size; instructions.push({ op: DW_CFA.def_cfa, reg: r.value, offset: o.value }); break; }
+          case DW_CFA.def_cfa_register: { const r = readULEB128(offset); offset += r.size; instructions.push({ op: DW_CFA.def_cfa_register, reg: r.value }); break; }
+          case DW_CFA.def_cfa_offset: { const o = readULEB128(offset); offset += o.size; instructions.push({ op: DW_CFA.def_cfa_offset, offset: o.value }); break; }
+          case DW_CFA.def_cfa_expression: { const len = readULEB128(offset); offset += len.size + len.value; instructions.push({ op: DW_CFA.def_cfa_expression }); break; }
+          case DW_CFA.expression: { const r = readULEB128(offset); offset += r.size; const len = readULEB128(offset); offset += len.size + len.value; instructions.push({ op: DW_CFA.expression, reg: r.value }); break; }
+          case DW_CFA.offset_extended_sf: { const r = readULEB128(offset); offset += r.size; const o = readSLEB128(offset); offset += o.size; instructions.push({ op: DW_CFA.offset_extended_sf, reg: r.value, factoredOffset: o.value }); break; }
+          case DW_CFA.def_cfa_sf: { const r = readULEB128(offset); offset += r.size; const o = readSLEB128(offset); offset += o.size; instructions.push({ op: DW_CFA.def_cfa_sf, reg: r.value, factoredOffset: o.value }); break; }
+          case DW_CFA.def_cfa_offset_sf: { const o = readSLEB128(offset); offset += o.size; instructions.push({ op: DW_CFA.def_cfa_offset_sf, factoredOffset: o.value }); break; }
+          default: instructions.push({ op: byte }); break;
         }
       }
     }
@@ -1809,26 +1852,26 @@ export function evaluateCfaAtPc(
   function apply(instructions: CfaInstruction[], stopAt?: number): boolean {
     for (const instr of instructions) {
       switch (instr.op) {
-        case 'DW_CFA_advance_loc':
-        case 'DW_CFA_advance_loc1':
-        case 'DW_CFA_advance_loc2':
-        case 'DW_CFA_advance_loc4': {
+        case DW_CFA.advance_loc:
+        case DW_CFA.advance_loc1:
+        case DW_CFA.advance_loc2:
+        case DW_CFA.advance_loc4: {
           const newLoc = loc + (instr.delta ?? 0) * codeAlignFactor;
           if (stopAt !== undefined && newLoc > stopAt) return true;
           loc = newLoc;
           break;
         }
-        case 'DW_CFA_set_loc': {
+        case DW_CFA.set_loc: {
           const newLoc = instr.address ?? 0;
           if (stopAt !== undefined && newLoc > stopAt) return true;
           loc = newLoc;
           break;
         }
-        case 'DW_CFA_def_cfa':          cfaReg = instr.reg ?? cfaReg; cfaOffset = instr.offset ?? 0; break;
-        case 'DW_CFA_def_cfa_register': cfaReg = instr.reg ?? cfaReg; break;
-        case 'DW_CFA_def_cfa_offset':   cfaOffset = instr.offset ?? 0; break;
-        case 'DW_CFA_def_cfa_sf':       cfaReg = instr.reg ?? cfaReg; cfaOffset = (instr.factoredOffset ?? 0) * dataAlignFactor; break;
-        case 'DW_CFA_def_cfa_offset_sf': cfaOffset = (instr.factoredOffset ?? 0) * dataAlignFactor; break;
+        case DW_CFA.def_cfa:          cfaReg = instr.reg ?? cfaReg; cfaOffset = instr.offset ?? 0; break;
+        case DW_CFA.def_cfa_register: cfaReg = instr.reg ?? cfaReg; break;
+        case DW_CFA.def_cfa_offset:   cfaOffset = instr.offset ?? 0; break;
+        case DW_CFA.def_cfa_sf:       cfaReg = instr.reg ?? cfaReg; cfaOffset = (instr.factoredOffset ?? 0) * dataAlignFactor; break;
+        case DW_CFA.def_cfa_offset_sf: cfaOffset = (instr.factoredOffset ?? 0) * dataAlignFactor; break;
       }
     }
     return false;
