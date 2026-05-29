@@ -201,7 +201,7 @@ describe('dwarfParser', () => {
     const buffer = readFileSync(testFile);
 
     const result = parseDwarf(buffer);
-
+ 
     let i = 0;
     let output = 'Sections:\n';
     output += "Idx Name          Size      VMA       LMA       File off  Algn\n";

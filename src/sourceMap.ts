@@ -33,6 +33,7 @@ export type TypeDescriptor =
   | { kind: 'primitive'; typeName: string; byteSize: number }
   | { kind: 'pointer';   typeName: string; byteSize: number; pointee: TypeDescriptor }
   | { kind: 'struct';    typeName: string; byteSize: number; getFields: () => FieldDescriptor[] }
+  | { kind: 'array';     typeName: string; byteSize: number; elementCount: number; elementType: TypeDescriptor }
   | { kind: 'unknown';   typeName: string; byteSize: number };
 
 export interface FieldDescriptor {

@@ -40,6 +40,8 @@ export class VariablesManager {
   private locationHandles = new Handles<Location>();
   private localsContextByRef = new Map<number, { pc: number | null; regs: Map<number, number> | null }>();
   private structPtrByRef = new Map<number, { ptrAddress: number; getFields: () => FieldDescriptor[] }>();
+  private arrayByRef = new Map<number, { baseAddress: number; elementCount: number; elementType: TypeDescriptor; rangeStart: number; rangeEnd: number }>();
+  private static readonly ARRAY_PAGE_SIZE = 100;
 
   /**
    * Creates a new VariablesManager instance.
@@ -106,6 +108,13 @@ export class VariablesManager {
     } else if (id === 'struct_ptr') {
       const ctx = this.structPtrByRef.get(variableReference);
       return ctx ? await this.renderStructFields(ctx.ptrAddress, ctx.getFields()) : [];
+    } else if (id === 'array') {
+      const ctx = this.arrayByRef.get(variableReference);
+      if (!ctx) return [];
+      const count = ctx.rangeEnd - ctx.rangeStart + 1;
+      return count > VariablesManager.ARRAY_PAGE_SIZE
+        ? this.renderArrayPages(ctx)
+        : await this.renderArrayElements(ctx);
     } else if (id === "segments") {
       return this.segmentVariables();
     }
@@ -444,6 +453,11 @@ export class VariablesManager {
         return { value: await this.peekFormatted(address, type.byteSize), variablesReference: 0 };
       case 'struct':
         return { value: await this.peekFormatted(address, type.byteSize), variablesReference: 0 };
+      case 'array': {
+        const ref = this.variableHandles.create('array');
+        this.arrayByRef.set(ref, { baseAddress: address, elementCount: type.elementCount, elementType: type.elementType, rangeStart: 0, rangeEnd: type.elementCount - 1 });
+        return { value: `[${type.elementCount} elements]`, variablesReference: ref };
+      }
       case 'pointer': {
         const ptrVal = await this.vAmiga.peek32(address);
         const ptrStr = formatAddress(ptrVal, this.sourceMap);
@@ -466,6 +480,52 @@ export class VariablesManager {
         return { value: ptrStr, variablesReference: 0 };
       }
     }
+  }
+
+  private arrayPageSize(count: number): number {
+    // Returns the page size that gives at most ARRAY_PAGE_SIZE pages per level.
+    // Grows by powers of ARRAY_PAGE_SIZE so pagination is naturally recursive.
+    let ps = VariablesManager.ARRAY_PAGE_SIZE;
+    while (Math.ceil(count / ps) > VariablesManager.ARRAY_PAGE_SIZE) {
+      ps *= VariablesManager.ARRAY_PAGE_SIZE;
+    }
+    return ps;
+  }
+
+  private renderArrayPages(ctx: { baseAddress: number; elementCount: number; elementType: TypeDescriptor; rangeStart: number; rangeEnd: number }): DebugProtocol.Variable[] {
+    const ps = this.arrayPageSize(ctx.rangeEnd - ctx.rangeStart + 1);
+    const pages: DebugProtocol.Variable[] = [];
+    for (let start = ctx.rangeStart; start <= ctx.rangeEnd; start += ps) {
+      const end = Math.min(start + ps - 1, ctx.rangeEnd);
+      const ref = this.variableHandles.create('array');
+      this.arrayByRef.set(ref, { ...ctx, rangeStart: start, rangeEnd: end });
+      pages.push({
+        name: `[${start}..${end}]`,
+        value: `[${end - start + 1} elements]`,
+        type: ctx.elementType.typeName,
+        variablesReference: ref,
+        presentationHint: { attributes: ['readOnly'] },
+      });
+    }
+    return pages;
+  }
+
+  private async renderArrayElements(ctx: { baseAddress: number; elementType: TypeDescriptor; rangeStart: number; rangeEnd: number }): Promise<DebugProtocol.Variable[]> {
+    const { baseAddress, rangeStart, rangeEnd, elementType } = ctx;
+    return Promise.all(Array.from({ length: rangeEnd - rangeStart + 1 }, async (_, i) => {
+      const idx = rangeStart + i;
+      let value = '???'; let variablesReference = 0;
+      try {
+        ({ value, variablesReference } = await this.renderTypedValue(baseAddress + idx * elementType.byteSize, elementType));
+      } catch { /* leave as ??? */ }
+      return {
+        name: `[${idx}]`,
+        value,
+        type: elementType.typeName,
+        variablesReference,
+        presentationHint: { attributes: ['readOnly'] },
+      };
+    }));
   }
 
   private async renderStructFields(baseAddress: number, fields: FieldDescriptor[]): Promise<DebugProtocol.Variable[]> {

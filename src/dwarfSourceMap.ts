@@ -448,6 +448,14 @@ function buildTypeDescriptor(typeDie: DebugInfoEntry | undefined, addressSize: n
       // Fields are resolved lazily via a closure — avoids upfront cost and handles
       // self-referential structs (e.g. struct Struct { Struct* next; }) naturally.
       return { kind: 'struct', typeName, byteSize, getFields: () => buildFieldDescriptors(typeDie, addressSize) };
+    case DW_TAG.array_type: {
+      const elementDie = getTypeDie(typeDie);
+      const elementType = buildTypeDescriptor(elementDie, addressSize, depth + 1);
+      const subrange = typeDie.children.find(c => c.tag === DW_TAG.subrange_type);
+      const upperBound = subrange ? findAttribute(subrange, DW_AT.upper_bound)?.value : undefined;
+      const elementCount = isNumber(upperBound) ? upperBound + 1 : 0;
+      return { kind: 'array', typeName, byteSize: elementCount * elementType.byteSize, elementCount, elementType };
+    }
     case DW_TAG.typedef:
     case DW_TAG.const_type:
     case DW_TAG.volatile_type:

@@ -5,13 +5,43 @@ simple_c.elf:     file format elf32-m68k
 Disassembly of section .text:
 
 00000000 <_start>:
-   0:	598f           	subq.l #4,sp
-   2:	2ebc 0000 2028 	move.l #8232,(sp)
-   8:	2057           	movea.l (sp),a0
-   a:	2050           	movea.l (a0),a0
-   c:	20bc 9999 9999 	move.l #-1717986919,(a0)
-  12:	2057           	movea.l (sp),a0
-  14:	317c 8888 0004 	move.w #-30584,4(a0)
-  1a:	2057           	movea.l (sp),a0
-  1c:	117c 0077 0006 	move.b #119,6(a0)
-  22:	60fe           	bra.s 22 <_start+0x22>
+   0:	4fef fdf8      	lea -520(sp),sp
+   4:	200f           	move.l sp,d0
+   6:	223c 0000 0070 	move.l #112,d1
+   c:	307c 0208      	movea.w #520,a0
+  10:	2f08           	move.l a0,-(sp)
+  12:	2f01           	move.l d1,-(sp)
+  14:	2f00           	move.l d0,-(sp)
+  16:	4eb9 0000 0024 	jsr 24 <memcpy>
+  1c:	4fef 000c      	lea 12(sp),sp
+  20:	60fe           	bra.s 20 <_start+0x20>
+  22:	4e71           	nop
+
+00000024 <memcpy>:
+  24:	518f           	subq.l #8,sp
+  26:	2f02           	move.l d2,-(sp)
+  28:	2f6f 0010 0008 	move.l 16(sp),8(sp)
+  2e:	2f6f 0014 0004 	move.l 20(sp),4(sp)
+  34:	6020           	bra.s 56 <memcpy+0x32>
+  36:	222f 0004      	move.l 4(sp),d1
+  3a:	2001           	move.l d1,d0
+  3c:	5280           	addq.l #1,d0
+  3e:	2f40 0004      	move.l d0,4(sp)
+  42:	202f 0008      	move.l 8(sp),d0
+  46:	2400           	move.l d0,d2
+  48:	5282           	addq.l #1,d2
+  4a:	2f42 0008      	move.l d2,8(sp)
+  4e:	2041           	movea.l d1,a0
+  50:	1210           	move.b (a0),d1
+  52:	2040           	movea.l d0,a0
+  54:	1081           	move.b d1,(a0)
+  56:	202f 0018      	move.l 24(sp),d0
+  5a:	2200           	move.l d0,d1
+  5c:	5381           	subq.l #1,d1
+  5e:	2f41 0018      	move.l d1,24(sp)
+  62:	4a80           	tst.l d0
+  64:	66d0           	bne.s 36 <memcpy+0x12>
+  66:	202f 0010      	move.l 16(sp),d0
+  6a:	241f           	move.l (sp)+,d2
+  6c:	508f           	addq.l #8,sp
+  6e:	4e75           	rts

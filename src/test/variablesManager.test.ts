@@ -241,6 +241,122 @@ describe("VariablesManager - Comprehensive Tests", () => {
     });
   });
 
+  describe("Local Array Variables", () => {
+    const mockCpuBase: CpuInfo = {
+      pc: "0x1000", d0:"0", d1:"0", d2:"0", d3:"0", d4:"0", d5:"0", d6:"0", d7:"0",
+      a0:"0", a1:"0", a2:"0", a3:"0", a4:"0", a5:"0", a6:"0", a7:"0x8000",
+      sr:"0", usp:"0", msp:"0", isp:"0", vbr:"0", irc:"0", sfc:"0", dfc:"0", cacr:"0", caar:"0",
+    };
+
+    it("should show element count and expand to indexed elements for int array", async () => {
+      const ARRAY_ADDR = 0x7FD4;
+      mockVAmiga.getCpuInfo.resolves(mockCpuBase);
+      mockSourceMap.getLocalsForPc.returns([{
+        name: 'array', typeName: 'int[]', byteSize: 40,
+        location: { kind: 'addr', address: ARRAY_ADDR },
+        typeDescriptor: {
+          kind: 'array', typeName: 'int[]', byteSize: 40, elementCount: 10,
+          elementType: { kind: 'primitive', typeName: 'int', byteSize: 4 },
+        },
+      }]);
+      for (let i = 0; i < 10; i++) {
+        mockVAmiga.peek32.withArgs(ARRAY_ADDR + i * 4).resolves(i + 1);
+      }
+      mockSourceMap.findSymbolOffset.returns(undefined);
+
+      const scopes = variablesManager.getScopes(0x1000);
+      const vars = await variablesManager.getVariables(scopes[0].variablesReference);
+
+      assert.strictEqual(vars.length, 1);
+      assert.strictEqual(vars[0].name, 'array');
+      assert.ok(vars[0].value.includes('10'), `Expected element count in "${vars[0].value}"`);
+      assert.ok(vars[0].variablesReference !== 0, 'Expected expandable handle for array');
+
+      const elements = await variablesManager.getVariables(vars[0].variablesReference);
+      assert.strictEqual(elements.length, 10);
+      assert.strictEqual(elements[0].name, '[0]');
+      assert.strictEqual(elements[0].type, 'int');
+      assert.strictEqual(elements[9].name, '[9]');
+    });
+
+    it("should paginate arrays larger than 100 elements into page groups", async () => {
+      const ARRAY_ADDR = 0x5000;
+      mockVAmiga.getCpuInfo.resolves(mockCpuBase);
+      mockSourceMap.getLocalsForPc.returns([{
+        name: 'big', typeName: 'int[]', byteSize: 600,
+        location: { kind: 'addr', address: ARRAY_ADDR },
+        typeDescriptor: {
+          kind: 'array', typeName: 'int[]', byteSize: 600, elementCount: 150,
+          elementType: { kind: 'primitive', typeName: 'int', byteSize: 4 },
+        },
+      }]);
+      mockSourceMap.findSymbolOffset.returns(undefined);
+      mockVAmiga.peek32.resolves(0x42);
+
+      const scopes = variablesManager.getScopes(0x1000);
+      const vars = await variablesManager.getVariables(scopes[0].variablesReference);
+      assert.ok(vars[0].value.includes('150'));
+
+      const pages = await variablesManager.getVariables(vars[0].variablesReference);
+      assert.strictEqual(pages.length, 2);
+      assert.strictEqual(pages[0].name, '[0..99]');
+      assert.strictEqual(pages[1].name, '[100..149]');
+      assert.ok(pages[0].variablesReference !== 0);
+      assert.ok(pages[1].variablesReference !== 0);
+
+      const firstPage = await variablesManager.getVariables(pages[0].variablesReference);
+      assert.strictEqual(firstPage.length, 100);
+      assert.strictEqual(firstPage[0].name, '[0]');
+      assert.strictEqual(firstPage[99].name, '[99]');
+
+      const secondPage = await variablesManager.getVariables(pages[1].variablesReference);
+      assert.strictEqual(secondPage.length, 50);
+      assert.strictEqual(secondPage[0].name, '[100]');
+      assert.strictEqual(secondPage[49].name, '[149]');
+    });
+
+    it("should paginate recursively for very large arrays", async () => {
+      const ARRAY_ADDR = 0x5000;
+      mockVAmiga.getCpuInfo.resolves(mockCpuBase);
+      // 10001 elements: top-level pageSize=10000 → 2 pages; second level pageSize=100 → 100 sub-pages
+      mockSourceMap.getLocalsForPc.returns([{
+        name: 'huge', typeName: 'int[]', byteSize: 40004,
+        location: { kind: 'addr', address: ARRAY_ADDR },
+        typeDescriptor: {
+          kind: 'array', typeName: 'int[]', byteSize: 40004, elementCount: 10001,
+          elementType: { kind: 'primitive', typeName: 'int', byteSize: 4 },
+        },
+      }]);
+      mockSourceMap.findSymbolOffset.returns(undefined);
+      mockVAmiga.peek32.resolves(0x1);
+
+      const scopes = variablesManager.getScopes(0x1000);
+      const vars = await variablesManager.getVariables(scopes[0].variablesReference);
+
+      const topPages = await variablesManager.getVariables(vars[0].variablesReference);
+      assert.strictEqual(topPages.length, 2);
+      assert.strictEqual(topPages[0].name, '[0..9999]');
+      assert.strictEqual(topPages[1].name, '[10000..10000]');
+
+      // [0..9999] has 10000 elements → 100 sub-pages of 100 each
+      const midPages = await variablesManager.getVariables(topPages[0].variablesReference);
+      assert.strictEqual(midPages.length, 100);
+      assert.strictEqual(midPages[0].name, '[0..99]');
+      assert.strictEqual(midPages[99].name, '[9900..9999]');
+
+      // [0..99] has 100 elements → rendered directly
+      const leafElements = await variablesManager.getVariables(midPages[0].variablesReference);
+      assert.strictEqual(leafElements.length, 100);
+      assert.strictEqual(leafElements[0].name, '[0]');
+      assert.strictEqual(leafElements[99].name, '[99]');
+
+      // [10000..10000] → single element
+      const tailElements = await variablesManager.getVariables(topPages[1].variablesReference);
+      assert.strictEqual(tailElements.length, 1);
+      assert.strictEqual(tailElements[0].name, '[10000]');
+    });
+  });
+
   describe("CPU Register Variables", () => {
     it("should return all CPU register variables", async () => {
       const mockCpuInfo: CpuInfo = {

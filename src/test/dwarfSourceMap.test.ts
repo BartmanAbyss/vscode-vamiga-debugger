@@ -1,13 +1,32 @@
 import { readFileSync } from 'fs';
 import { ELFSectionHeader, parseDwarf } from '../dwarfParser';
 import { sourceMapFromDwarf } from '../dwarfSourceMap';
-import { FieldDescriptor } from '../sourceMap';
+import { FieldDescriptor, LocalVariable, SourceMap, TypeDescriptor } from '../sourceMap';
 import * as path from 'path';
 
 function isSectionIncluded(header: ELFSectionHeader): boolean {
   return header.size > 0 && (header.addr > 0 ||
     header.name.startsWith(".text") || header.name.startsWith(".data") ||
     header.name.startsWith(".bss") || header.name.startsWith(".rodata"));
+}
+
+function loadSourceMap(fixture: string): SourceMap {
+  const buffer = readFileSync(path.join(__dirname, 'fixtures/amigaPrograms', fixture));
+  const dwarf = parseDwarf(buffer);
+  const offsets = [...dwarf.sections.values()].filter(s => isSectionIncluded(s)).map(s => s.addr);
+  return sourceMapFromDwarf(dwarf, offsets, '');
+}
+
+function getLocalsAtLine(sourceMap: SourceMap, line: number): LocalVariable[] {
+  const mainC = sourceMap.getSourceFiles().find(s => s.includes('simple_c.c'));
+  expect(mainC).toBeDefined();
+  const loc = sourceMap.lookupSourceLine(mainC!, line);
+  return sourceMap.getLocalsForPc(loc.address);
+}
+
+function assertKind<K extends TypeDescriptor['kind']>(td: TypeDescriptor, kind: K): Extract<TypeDescriptor, { kind: K }> {
+  expect(td.kind).toBe(kind);
+  return td as Extract<TypeDescriptor, { kind: K }>;
 }
 
 describe('dwarfSourceMap', () => {
@@ -63,12 +82,7 @@ describe('dwarfSourceMap', () => {
   });
 
   it('should return inline frames for a PC inside an inlined function', () => {
-    const testFile = path.join(__dirname, 'fixtures/amigaPrograms', 'simple_c/01_inline/simple_c.elf');
-    const buffer = readFileSync(testFile);
-    const dwarf = parseDwarf(buffer);
-
-    const offsets = [...dwarf.sections.values()].filter(s => isSectionIncluded(s)).map(s => s.addr);
-    const sourceMap = sourceMapFromDwarf(dwarf, offsets, '');
+    const sourceMap = loadSourceMap('simple_c/01_inline/simple_c.elf');
 
     // Inline 'func_inline' at ELF [0x10,0x18), call_line=8
     const frames = sourceMap.getInlineFramesForPc(0x10);
@@ -92,53 +106,58 @@ describe('dwarfSourceMap', () => {
   });
 
   it('should return variable DIEs for a PC inside a function range', () => {
-    const testFile = path.join(__dirname, 'fixtures/amigaPrograms', 'simple_c/01_inline/simple_c.elf');
-    const buffer = readFileSync(testFile);
-    const dwarf = parseDwarf(buffer);
-
-    const offsets = [...dwarf.sections.values()].filter(s => isSectionIncluded(s)).map(s => s.addr);
-    const sourceMap = sourceMapFromDwarf(dwarf, offsets, '');
-
-    const mainCPaths = sourceMap.getSourceFiles().filter(s => s.includes('simple_c.c'));
-    expect(mainCPaths.length).toBeGreaterThan(0);
-
-    const location = sourceMap.lookupSourceLine(mainCPaths[0], 14);
-    expect(location).toBeDefined();
-
-    const results = sourceMap.getLocalsForPc(location.address);
+    const sourceMap = loadSourceMap('simple_c/01_inline/simple_c.elf');
+    const results = getLocalsAtLine(sourceMap, 14);
 
     expect(results.length).toBe(3);
     const names = results.map((v) => v.name).sort();
     expect(names).toEqual(['local_a', 'local_b', 'local_c']);
   });
 
-  it('should build typeDescriptor with pointer-in-struct for simple_c (02_pointer fixture)', () => {
-    const testFile = path.join(__dirname, 'fixtures/amigaPrograms/simple_c/simple_c.elf');
-    const buffer = readFileSync(testFile);
-    const dwarf = parseDwarf(buffer);
-    const offsets = [...dwarf.sections.values()]
-      .filter(s => isSectionIncluded(s))
-      .map(s => s.addr);
-    const sourceMap = sourceMapFromDwarf(dwarf, offsets, '');
+  it('should build pointer typeDescriptors for simple_c (02_pointer fixture)', () => {
+    const locals = getLocalsAtLine(loadSourceMap('simple_c/02_pointer/simple_c.elf'), 6);
 
-    const mainC = sourceMap.getSourceFiles().find(s => s.includes('simple_c.c'));
-    expect(mainC).toBeDefined();
+    const ptrInt = locals.find(v => v.name === 'ptr_int');
+    expect(ptrInt).toBeDefined();
+    const tdInt = assertKind(ptrInt!.typeDescriptor, 'pointer');
+    expect(tdInt.pointee.kind).toBe('primitive');
+    expect(tdInt.pointee.typeName).toBe('int');
+    expect(tdInt.pointee.byteSize).toBe(4);
 
-    const loc = sourceMap.lookupSourceLine(mainC!, 16);
-    expect(loc).toBeDefined();
+    const ptrShort = locals.find(v => v.name === 'ptr_short');
+    expect(ptrShort).toBeDefined();
+    const tdShort = assertKind(ptrShort!.typeDescriptor, 'pointer');
+    expect(tdShort.pointee.kind).toBe('primitive');
+    expect(tdShort.pointee.byteSize).toBe(2);
 
-    const locals = sourceMap.getLocalsForPc(loc.address);
+    const ptrChar = locals.find(v => v.name === 'ptr_char');
+    expect(ptrChar).toBeDefined();
+    const tdChar = assertKind(ptrChar!.typeDescriptor, 'pointer');
+    expect(tdChar.pointee.kind).toBe('primitive');
+    expect(tdChar.pointee.byteSize).toBe(1);
+  });
+
+  it('should build array typeDescriptor for simple_c (04_array fixture)', () => {
+    const locals = getLocalsAtLine(loadSourceMap('simple_c/04_array/simple_c.elf'), 16);
+    const arrayVar = locals.find(v => v.name === 'array');
+    expect(arrayVar).toBeDefined();
+
+    const td = assertKind(arrayVar!.typeDescriptor, 'array');
+    expect(td.elementCount).toBe(130);
+    expect(td.elementType.kind).toBe('primitive');
+    expect(td.elementType.typeName).toBe('int');
+    expect(td.elementType.byteSize).toBe(4);
+    expect(td.byteSize).toBe(520);
+  });
+
+  it('should build typeDescriptor with pointer-in-struct for simple_c (03_struct fixture)', () => {
+    const locals = getLocalsAtLine(loadSourceMap('simple_c/03_struct/simple_c.elf'), 16);
     const ptrVar = locals.find(v => v.name === 'ptr_struct');
     expect(ptrVar).toBeDefined();
 
-    const td = ptrVar!.typeDescriptor;
-    expect(td.kind).toBe('pointer');
-    if (td.kind !== 'pointer') return;
-
-    expect(td.pointee.kind).toBe('struct');
-    if (td.pointee.kind !== 'struct') return;
-
-    const fields = td.pointee.getFields();
+    const td = assertKind(ptrVar!.typeDescriptor, 'pointer');
+    const pointee = assertKind(td.pointee, 'struct');
+    const fields = pointee.getFields();
     const intPtrField = fields.find((f: FieldDescriptor) => f.name === '_int_ptr');
     expect(intPtrField).toBeDefined();
     expect(intPtrField!.type.kind).toBe('pointer');
