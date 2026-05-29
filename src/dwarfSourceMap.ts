@@ -8,7 +8,7 @@ import {
   LineNumberInstruction,
   LineNumberProgram,
 } from "./dwarfParser";
-import { SourceMap, ScopeEntry, LocalVariable, LocalLocation, Location, Segment, InlineFrame, InlineEntry, StructField } from "./sourceMap";
+import { SourceMap, ScopeEntry, LocalVariable, LocalLocation, Location, Segment, InlineFrame, InlineEntry, TypeDescriptor, FieldDescriptor } from "./sourceMap";
 import { DebugFrame } from "./dwarfParser";
 import { MemoryType } from "./amigaHunkParser";
 
@@ -432,16 +432,40 @@ function resolveByteSize(typeDie: DebugInfoEntry | undefined, addressSize: numbe
   }
 }
 
-function extractStructFields(structDie: DebugInfoEntry, addressSize: number): StructField[] {
+function buildTypeDescriptor(typeDie: DebugInfoEntry | undefined, addressSize: number, depth = 0): TypeDescriptor {
+  if (!typeDie || depth > 8) return { kind: 'unknown', typeName: '?', byteSize: 0 };
+  const typeName = typeNameFromDie(typeDie);
+  const byteSize = resolveByteSize(typeDie, addressSize);
+  switch (typeDie.tag) {
+    case DW_TAG.base_type:
+      return { kind: 'primitive', typeName, byteSize };
+    case DW_TAG.pointer_type: {
+      const pointeeDie = getTypeDie(typeDie);
+      const pointee = buildTypeDescriptor(pointeeDie, addressSize, depth + 1);
+      return { kind: 'pointer', typeName, byteSize: addressSize, pointee };
+    }
+    case DW_TAG.structure_type:
+      // Fields are resolved lazily via a closure — avoids upfront cost and handles
+      // self-referential structs (e.g. struct Struct { Struct* next; }) naturally.
+      return { kind: 'struct', typeName, byteSize, getFields: () => buildFieldDescriptors(typeDie, addressSize) };
+    case DW_TAG.typedef:
+    case DW_TAG.const_type:
+    case DW_TAG.volatile_type:
+    case DW_TAG.restrict_type:
+      return buildTypeDescriptor(getTypeDie(typeDie), addressSize, depth + 1);
+    default:
+      return { kind: 'primitive', typeName, byteSize };
+  }
+}
+
+function buildFieldDescriptors(structDie: DebugInfoEntry, addressSize: number): FieldDescriptor[] {
   return structDie.children
     .filter(m => m.tag === DW_TAG.member)
     .map(member => {
-      const memberName = findAttribute(member, DW_AT.name)?.value as string ?? '???';
-      const memberTypeDie = getTypeDie(member);
-      const memberTypeName = memberTypeDie ? typeNameFromDie(memberTypeDie) : '<unknown>';
-      const memberByteSize = resolveByteSize(memberTypeDie, addressSize);
-      const memberOffset = findAttribute(member, DW_AT.data_member_location)?.value;
-      return { name: memberName, typeName: memberTypeName, byteSize: memberByteSize, offset: typeof memberOffset === 'number' ? memberOffset : 0 };
+      const name = findAttribute(member, DW_AT.name)?.value as string ?? '???';
+      const type = buildTypeDescriptor(getTypeDie(member), addressSize);
+      const rawOffset = findAttribute(member, DW_AT.data_member_location)?.value;
+      return { name, offset: typeof rawOffset === 'number' ? rawOffset : 0, type };
     });
 }
 
@@ -456,25 +480,8 @@ function dieToLocalVar(
   const typeName = typeDie ? typeNameFromDie(typeDie) : '<unknown>';
   const byteSize = resolveByteSize(typeDie, addressSize);
   const location = resolveLocation(die, relocate, frameBase);
-  let pointeeByteSize: number | undefined;
-  let pointeeFields: StructField[] | undefined;
-  if (typeDie?.tag === DW_TAG.pointer_type) {
-    const pointeeDie = getTypeDie(typeDie);
-    if (pointeeDie) {
-      if (pointeeDie.tag === DW_TAG.structure_type) {
-        const fields = extractStructFields(pointeeDie, addressSize);
-        if (fields.length > 0) pointeeFields = fields;
-      } else {
-        const sz = resolveByteSize(pointeeDie, addressSize);
-        if (sz > 0) pointeeByteSize = sz;
-      }
-    }
-  }
-  return {
-    name, typeName, byteSize, location,
-    ...(pointeeByteSize !== undefined && { pointeeByteSize }),
-    ...(pointeeFields && { pointeeFields }),
-  };
+  const typeDescriptor = buildTypeDescriptor(typeDie, addressSize);
+  return { name, typeName, byteSize, location, typeDescriptor };
 }
 
 function buildScopeTable(

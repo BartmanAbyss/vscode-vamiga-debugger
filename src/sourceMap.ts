@@ -29,13 +29,24 @@ export interface StructField {
   offset: number;
 }
 
+export type TypeDescriptor =
+  | { kind: 'primitive'; typeName: string; byteSize: number }
+  | { kind: 'pointer';   typeName: string; byteSize: number; pointee: TypeDescriptor }
+  | { kind: 'struct';    typeName: string; byteSize: number; getFields: () => FieldDescriptor[] }
+  | { kind: 'unknown';   typeName: string; byteSize: number };
+
+export interface FieldDescriptor {
+  name: string;
+  offset: number;
+  type: TypeDescriptor;
+}
+
 export interface LocalVariable {
   name: string;
   typeName: string;
   byteSize: number;
   location: LocalLocation;
-  pointeeByteSize?: number;
-  pointeeFields?: StructField[];
+  typeDescriptor: TypeDescriptor;
 }
 
 export interface ScopeEntry {

@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import { ELFSectionHeader, parseDwarf } from '../dwarfParser';
 import { sourceMapFromDwarf } from '../dwarfSourceMap';
+import { FieldDescriptor } from '../sourceMap';
 import * as path from 'path';
 
 function isSectionIncluded(header: ELFSectionHeader): boolean {
@@ -111,5 +112,45 @@ describe('dwarfSourceMap', () => {
     expect(names).toEqual(['local_a', 'local_b', 'local_c']);
   });
 
+  it('should build typeDescriptor with pointer-in-struct for simple_c (02_pointer fixture)', () => {
+    const testFile = path.join(__dirname, 'fixtures/amigaPrograms/simple_c/simple_c.elf');
+    const buffer = readFileSync(testFile);
+    const dwarf = parseDwarf(buffer);
+    const offsets = [...dwarf.sections.values()]
+      .filter(s => isSectionIncluded(s))
+      .map(s => s.addr);
+    const sourceMap = sourceMapFromDwarf(dwarf, offsets, '');
+
+    const mainC = sourceMap.getSourceFiles().find(s => s.includes('simple_c.c'));
+    expect(mainC).toBeDefined();
+
+    const loc = sourceMap.lookupSourceLine(mainC!, 16);
+    expect(loc).toBeDefined();
+
+    const locals = sourceMap.getLocalsForPc(loc.address);
+    const ptrVar = locals.find(v => v.name === 'ptr_struct');
+    expect(ptrVar).toBeDefined();
+
+    const td = ptrVar!.typeDescriptor;
+    expect(td.kind).toBe('pointer');
+    if (td.kind !== 'pointer') return;
+
+    expect(td.pointee.kind).toBe('struct');
+    if (td.pointee.kind !== 'struct') return;
+
+    const fields = td.pointee.getFields();
+    const intPtrField = fields.find((f: FieldDescriptor) => f.name === '_int_ptr');
+    expect(intPtrField).toBeDefined();
+    expect(intPtrField!.type.kind).toBe('pointer');
+    expect(intPtrField!.offset).toBe(0);
+
+    const shortField = fields.find((f: FieldDescriptor) => f.name === '_short');
+    expect(shortField).toBeDefined();
+    expect(shortField!.type.kind).toBe('primitive');
+
+    const charField = fields.find((f: FieldDescriptor) => f.name === '_char');
+    expect(charField).toBeDefined();
+    expect(charField!.type.kind).toBe('primitive');
+  });
 
 });

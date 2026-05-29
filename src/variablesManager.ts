@@ -1,6 +1,6 @@
 import { DebugProtocol } from "@vscode/debugprotocol";
 import { CpuInfo, VAmiga } from "./vAmiga";
-import { SourceMap, Location, LocalLocation, StructField } from "./sourceMap";
+import { SourceMap, Location, LocalLocation, TypeDescriptor, FieldDescriptor } from "./sourceMap";
 import { Handles, Scope } from "@vscode/debugadapter";
 import { vectors, customAddresses } from "./hardware";
 import {
@@ -39,7 +39,7 @@ export class VariablesManager {
   private variableHandles = new Handles<string | ArrayValue>();
   private locationHandles = new Handles<Location>();
   private localsContextByRef = new Map<number, { pc: number | null; regs: Map<number, number> | null }>();
-  private structPtrByRef = new Map<number, { ptrAddress: number; fields: StructField[] }>();
+  private structPtrByRef = new Map<number, { ptrAddress: number; getFields: () => FieldDescriptor[] }>();
 
   /**
    * Creates a new VariablesManager instance.
@@ -105,7 +105,7 @@ export class VariablesManager {
       return this.localPtrVariables(id);
     } else if (id === 'struct_ptr') {
       const ctx = this.structPtrByRef.get(variableReference);
-      return ctx ? await this.structPtrVariables(ctx.ptrAddress, ctx.fields) : [];
+      return ctx ? await this.renderStructFields(ctx.ptrAddress, ctx.getFields()) : [];
     } else if (id === "segments") {
       return this.segmentVariables();
     }
@@ -418,32 +418,7 @@ export class VariablesManager {
       const address = this.locationToAddress(v.location, cpuInfo, effectivePc, regs);
       if (address !== undefined) {
         try {
-          if (v.byteSize === 4) {
-            const ptrVal = await this.vAmiga.peek32(address);
-            const isPtr = v.typeName.endsWith(' *') && this.vAmiga.isValidAddress(ptrVal);
-            const peerSize = v.pointeeByteSize;
-            if (isPtr && v.pointeeFields && v.pointeeFields.length > 0) {
-              value = formatAddress(ptrVal, this.sourceMap);
-              const ref = this.variableHandles.create('struct_ptr');
-              this.structPtrByRef.set(ref, { ptrAddress: ptrVal, fields: v.pointeeFields });
-              variablesReference = ref;
-            } else if (isPtr && peerSize && [1, 2, 4].includes(peerSize)) {
-              let derefVal: number | undefined;
-              try { derefVal = await this.peekBySize(ptrVal, peerSize); } catch { /* leave undefined */ }
-              const ptrStr = formatAddress(ptrVal, this.sourceMap);
-              if (derefVal !== undefined) {
-                const pointeeTypeName = v.typeName.slice(0, -2);
-                value = ptrStr + ' (' + formatNumber(derefVal, peerSize * 2) + ')';
-                variablesReference = this.variableHandles.create(`local_ptr:${pointeeTypeName}:${peerSize}:${derefVal}`);
-              } else {
-                value = ptrStr;
-              }
-            } else {
-              value = isPtr ? formatAddress(ptrVal, this.sourceMap) : formatNumber(ptrVal, 8);
-            }
-          } else {
-            value = await this.peekFormatted(address, v.byteSize);
-          }
+          ({ value, variablesReference } = await this.renderTypedValue(address, v.typeDescriptor));
         } catch {
           value = '???';
         }
@@ -461,16 +436,50 @@ export class VariablesManager {
     locals.sort((a, b) => (a.name < b.name ? -1 : 1));
     return locals;
   }
-  
-  private async structPtrVariables(ptrAddress: number, fields: StructField[]): Promise<DebugProtocol.Variable[]> {
+
+  private async renderTypedValue(address: number, type: TypeDescriptor): Promise<{ value: string; variablesReference: number }> {
+    switch (type.kind) {
+      case 'primitive':
+      case 'unknown':
+        return { value: await this.peekFormatted(address, type.byteSize), variablesReference: 0 };
+      case 'struct':
+        return { value: await this.peekFormatted(address, type.byteSize), variablesReference: 0 };
+      case 'pointer': {
+        const ptrVal = await this.vAmiga.peek32(address);
+        const ptrStr = formatAddress(ptrVal, this.sourceMap);
+        if (!this.vAmiga.isValidAddress(ptrVal))
+          return { value: ptrStr, variablesReference: 0 };
+        const pointee = type.pointee;
+        if (pointee.kind === 'struct') {
+          const ref = this.variableHandles.create('struct_ptr');
+          this.structPtrByRef.set(ref, { ptrAddress: ptrVal, getFields: pointee.getFields });
+          return { value: ptrStr, variablesReference: ref };
+        }
+        if (pointee.kind === 'primitive' && [1, 2, 4].includes(pointee.byteSize)) {
+          let derefVal: number | undefined;
+          try { derefVal = await this.peekBySize(ptrVal, pointee.byteSize); } catch { /* leave undefined */ }
+          if (derefVal !== undefined) {
+            const ref = this.variableHandles.create(`local_ptr:${pointee.typeName}:${pointee.byteSize}:${derefVal}`);
+            return { value: `${ptrStr} (${formatNumber(derefVal, pointee.byteSize * 2)})`, variablesReference: ref };
+          }
+        }
+        return { value: ptrStr, variablesReference: 0 };
+      }
+    }
+  }
+
+  private async renderStructFields(baseAddress: number, fields: FieldDescriptor[]): Promise<DebugProtocol.Variable[]> {
     return Promise.all(fields.map(async (field) => {
       let value = '???';
-      try { value = await this.peekFormatted(ptrAddress + field.offset, field.byteSize); } catch { /* leave as ??? */ }
+      let variablesReference = 0;
+      try {
+        ({ value, variablesReference } = await this.renderTypedValue(baseAddress + field.offset, field.type));
+      } catch { /* leave as ??? */ }
       return {
         name: field.name,
         value,
-        type: field.typeName,
-        variablesReference: 0,
+        type: field.type.typeName,
+        variablesReference,
         presentationHint: { attributes: ['readOnly'] },
       };
     }));
