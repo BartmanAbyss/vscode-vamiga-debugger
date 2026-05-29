@@ -245,7 +245,8 @@ export function sourceMapFromDwarf(
     ? relocateDebugFrame(dwarfData.debugFrame, relocate)
     : undefined;
   const inlineTable = buildInlineTable(dwarfData, relocate, baseDir);
-  return new SourceMap(segments, sources, symbols, locations, scopeTable, relocatedDebugFrame, inlineTable);
+  const globalVars = buildGlobalsTable(dwarfData, relocate);
+  return new SourceMap(segments, sources, symbols, locations, scopeTable, relocatedDebugFrame, inlineTable, globalVars);
 }
 
 function relocateDebugFrame(
@@ -536,6 +537,29 @@ function buildScopeTable(
 
   entries.sort((a, b) => a.low - b.low);
   return entries;
+}
+
+function buildGlobalsTable(
+  dwarfData: DWARFData,
+  relocate: (addr: number) => number | undefined,
+): LocalVariable[] {
+  const globals: LocalVariable[] = [];
+  for (const cu of dwarfData.compilationUnits) {
+    const root = cu.dies[0];
+    if (!root) continue;
+    for (const die of root.children) {
+      if (die.tag !== DW_TAG.variable) continue;
+      const location = resolveLocation(die, relocate);
+      if (location.kind !== 'addr') continue;
+      const name = findAttribute(die, DW_AT.name)?.value as string ?? '???';
+      const typeDie = getTypeDie(die);
+      const typeName = typeDie ? typeNameFromDie(typeDie) : '<unknown>';
+      const byteSize = resolveByteSize(typeDie, cu.addressSize);
+      const typeDescriptor = buildTypeDescriptor(typeDie, cu.addressSize);
+      globals.push({ name, typeName, byteSize, location, typeDescriptor });
+    }
+  }
+  return globals;
 }
 
 function buildInlineTable(

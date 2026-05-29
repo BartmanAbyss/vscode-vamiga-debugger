@@ -17,6 +17,7 @@ describe("VariablesManager - Comprehensive Tests", () => {
   beforeEach(() => {
     mockVAmiga = sinon.createStubInstance(VAmiga);
     mockSourceMap = sinon.createStubInstance(SourceMap);
+    mockSourceMap.getGlobalVariables.returns([]);
     variablesManager = new VariablesManager(mockVAmiga, mockSourceMap);
   });
 
@@ -25,7 +26,7 @@ describe("VariablesManager - Comprehensive Tests", () => {
   });
 
   describe("Scopes Management", () => {
-    it("should return all scopes", () => {
+    it("should return all scopes with Symbols when no DWARF globals", () => {
       const scopes = variablesManager.getScopes();
 
       assert.strictEqual(scopes.length, 5);
@@ -34,6 +35,81 @@ describe("VariablesManager - Comprehensive Tests", () => {
       assert.strictEqual(scopes[2].name, "Vectors");
       assert.strictEqual(scopes[3].name, "Symbols");
       assert.strictEqual(scopes[4].name, "Segments");
+    });
+
+    it("should show Globals scope after Locals and keep Symbols when DWARF globals are present", () => {
+      mockSourceMap.getLocalsForPc.returns([{ name: 'x', byteSize: 4, typeName: 'int', location: { kind: 'addr', address: 0x1000 }, typeDescriptor: { kind: 'primitive', typeName: 'int', byteSize: 4 } }]);
+      mockSourceMap.getGlobalVariables.returns([{
+        name: 'global_int', typeName: 'int', byteSize: 4,
+        location: { kind: 'addr', address: 0x2040 },
+        typeDescriptor: { kind: 'primitive', typeName: 'int', byteSize: 4 },
+      }]);
+      const scopes = variablesManager.getScopes(0x1000);
+      assert.strictEqual(scopes[0].name, 'Locals');
+      assert.strictEqual(scopes[1].name, 'Globals');
+      assert.ok(scopes.some(s => s.name === 'Symbols'), 'Expected Symbols scope to remain');
+    });
+
+    it("should expand Globals scope using type information", async () => {
+      mockSourceMap.getGlobalVariables.returns([
+        { name: 'global_int',   typeName: 'int',   byteSize: 4, location: { kind: 'addr', address: 0x2040 }, typeDescriptor: { kind: 'primitive', typeName: 'int',   byteSize: 4 } },
+        { name: 'global_short', typeName: 'short', byteSize: 2, location: { kind: 'addr', address: 0x2044 }, typeDescriptor: { kind: 'primitive', typeName: 'short', byteSize: 2 } },
+      ]);
+      mockVAmiga.peek32.withArgs(0x2040).resolves(0x11111111);
+      mockVAmiga.peek16.withArgs(0x2044).resolves(0x2222);
+      mockSourceMap.findSymbolOffset.returns(undefined);
+
+      const scopes = variablesManager.getScopes();
+      const globalsScope = scopes.find(s => s.name === 'Globals');
+      assert.ok(globalsScope);
+
+      const vars = await variablesManager.getVariables(globalsScope!.variablesReference);
+      assert.strictEqual(vars.length, 2);
+      // sorted by name: global_int, global_short
+      assert.strictEqual(vars[0].name, 'global_int');
+      assert.ok(vars[0].value.includes('11111111'));
+      assert.strictEqual(vars[0].type, 'int');
+      assert.strictEqual(vars[1].name, 'global_short');
+      assert.ok(vars[1].value.includes('2222'));
+      assert.strictEqual(vars[1].type, 'short');
+    });
+
+    it("should expand a struct-typed global into its fields", async () => {
+      const STRUCT_ADDR = 0x2050;
+      mockSourceMap.getGlobalVariables.returns([{
+        name: 's', typeName: 'struct Struct', byteSize: 7,
+        location: { kind: 'addr', address: STRUCT_ADDR },
+        typeDescriptor: {
+          kind: 'struct', typeName: 'struct Struct', byteSize: 7,
+          getFields: () => [
+            { name: '_int',   offset: 0, type: { kind: 'primitive', typeName: 'int',   byteSize: 4 } },
+            { name: '_short', offset: 4, type: { kind: 'primitive', typeName: 'short', byteSize: 2 } },
+            { name: '_char',  offset: 6, type: { kind: 'primitive', typeName: 'char',  byteSize: 1 } },
+          ],
+        },
+      }]);
+      mockSourceMap.findSymbolOffset.returns(undefined);
+      mockVAmiga.peek32.withArgs(STRUCT_ADDR + 0).resolves(0x99999999);
+      mockVAmiga.peek16.withArgs(STRUCT_ADDR + 4).resolves(0x8888);
+      mockVAmiga.peek8.withArgs(STRUCT_ADDR + 6).resolves(0x77);
+
+      const scopes = variablesManager.getScopes();
+      const globalsScope = scopes.find(s => s.name === 'Globals');
+      assert.ok(globalsScope);
+
+      const vars = await variablesManager.getVariables(globalsScope!.variablesReference);
+      assert.strictEqual(vars.length, 1);
+      assert.strictEqual(vars[0].name, 's');
+      assert.ok(vars[0].variablesReference !== 0, 'Expected expandable handle for struct global');
+
+      const fields = await variablesManager.getVariables(vars[0].variablesReference);
+      assert.strictEqual(fields.length, 3);
+      assert.strictEqual(fields[0].name, '_int');
+      assert.ok(fields[0].value.includes('99999999'));
+      assert.strictEqual(fields[1].name, '_short');
+      assert.ok(fields[1].value.includes('8888'));
+      assert.strictEqual(fields[2].name, '_char');
+      assert.ok(fields[2].value.includes('77'));
     });
 
     it("should include Locals scope only when there are locals for the PC", () => {

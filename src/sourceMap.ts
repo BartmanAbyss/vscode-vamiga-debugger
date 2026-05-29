@@ -90,6 +90,7 @@ export class SourceMap {
     private scopeTable: ScopeEntry[] = [],
     private debugFrame?: DebugFrame,
     private inlineTable: InlineEntry[] = [],
+    private globalVars: LocalVariable[] = [],
   ) {
     for (const location of locations) {
       // Don't overwrite existing address mappings - first wins
@@ -110,6 +111,10 @@ export class SourceMap {
       }
       this.locationsBySource.set(pathKey, linesMap);
     }
+  }
+
+  public getGlobalVariables(): LocalVariable[] {
+    return this.globalVars;
   }
 
   public getSourceFiles(): string[] {

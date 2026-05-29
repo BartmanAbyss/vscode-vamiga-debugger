@@ -62,6 +62,10 @@ export class VariablesManager {
       this.localsContextByRef.set(localsRef, { pc, regs });
       scopes.push(new Scope("Locals", localsRef, false));
     }
+    const hasGlobals = (this.sourceMap?.getGlobalVariables()?.length ?? 0) > 0;
+    if (hasGlobals) {
+      scopes.push(new Scope("Globals", this.variableHandles.create("globals"), false));
+    }
     scopes.push(
       new Scope("CPU Registers", this.variableHandles.create("registers"), false),
       new Scope("Custom Registers", this.variableHandles.create("custom"), false),
@@ -96,6 +100,8 @@ export class VariablesManager {
       return await this.customDetailVariables(id);
     } else if (id === "vectors") {
       return await this.vectorVariables();
+    } else if (id === "globals") {
+      return await this.globalVariables();
     } else if (id === "symbols") {
       return await this.symbolVariables();
     } else if (id.startsWith("symbol_ptr_")) {
@@ -314,6 +320,28 @@ export class VariablesManager {
     return variables;
   }
 
+  private async globalVariables(): Promise<DebugProtocol.Variable[]> {
+    const globals = this.sourceMap.getGlobalVariables();
+    const result = await Promise.all(globals.map(async (v) => {
+      let value = '???';
+      let variablesReference = 0;
+      if (v.location.kind === 'addr') {
+        try {
+          ({ value, variablesReference } = await this.renderTypedValue(v.location.address, v.typeDescriptor));
+        } catch { /* leave as ??? */ }
+      }
+      return {
+        name: v.name,
+        value,
+        type: v.typeName,
+        variablesReference,
+        presentationHint: { attributes: ['readOnly'] },
+      };
+    }));
+    result.sort((a, b) => (a.name < b.name ? -1 : 1));
+    return result;
+  }
+
   public async symbolVariables(): Promise<DebugProtocol.Variable[]> {
     const symbolLengths = this.sourceMap.getSymbolLengths();
     const symbols = this.sourceMap.getSymbols();
@@ -451,8 +479,11 @@ export class VariablesManager {
       case 'primitive':
       case 'unknown':
         return { value: await this.peekFormatted(address, type.byteSize), variablesReference: 0 };
-      case 'struct':
-        return { value: await this.peekFormatted(address, type.byteSize), variablesReference: 0 };
+      case 'struct': {
+        const ref = this.variableHandles.create('struct_ptr');
+        this.structPtrByRef.set(ref, { ptrAddress: address, getFields: type.getFields });
+        return { value: formatAddress(address, this.sourceMap), variablesReference: ref };
+      }
       case 'array': {
         const ref = this.variableHandles.create('array');
         this.arrayByRef.set(ref, { baseAddress: address, elementCount: type.elementCount, elementType: type.elementType, rangeStart: 0, rangeEnd: type.elementCount - 1 });
