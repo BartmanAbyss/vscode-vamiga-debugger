@@ -13,7 +13,51 @@
                 "panel": "dedicated",
                 "reveal": "never"
             },
-            "problemMatcher": ["$tsc", "$esbuild"]
+            "problemMatcher": ["$tsc"]
+        },
+        {
+            "label": "build vAmiga",
+            "type": "shell",
+            "windows": {
+                "command": "cmd",
+                "args": ["/c", "call C:\\emsdk\\emsdk_env.bat && cmake --build build -j8 && copy /Y build\\vAmiga.js ..\\vamiga\\ && copy /Y build\\vAmiga.wasm ..\\vamiga\\"]
+            },
+            "osx": {
+                "command": "bash",
+                "args": ["-c", "source ~/emsdk/emsdk_env.sh && cmake --build build -j8 && cp build/vAmiga.js ../vamiga/ && cp build/vAmiga.wasm ../vamiga/"]
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/vamigaweb_fork",
+                "env": { "EMSDK_QUIET": "1" }
+            },
+            "group": "build",
+            "presentation": {
+                "panel": "dedicated",
+                "reveal": "always"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "configure vAmiga (first time/after CMakeLists changes)",
+            "type": "shell",
+            "windows": {
+                "command": "cmd",
+                "args": ["/c", "call C:\\emsdk\\emsdk_env.bat && emcmake cmake -S . -B build -G Ninja"]
+            },
+            "osx": {
+                "command": "bash",
+                "args": ["-c", "source ~/emsdk/emsdk_env.sh && emcmake cmake -S . -B build"]
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/vamigaweb_fork",
+                "env": { "EMSDK_QUIET": "1" }
+            },
+            "group": "build",
+            "presentation": {
+                "panel": "dedicated",
+                "reveal": "always"
+            },
+            "problemMatcher": []
         },
         {
             "type": "npm",
