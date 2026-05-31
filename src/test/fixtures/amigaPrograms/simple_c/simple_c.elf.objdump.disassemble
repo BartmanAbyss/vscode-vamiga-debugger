@@ -1,0 +1,32 @@
+
+simple_c.elf:     file format elf32-m68k
+
+
+Disassembly of section .text:
+
+00000000 <_start>:
+   0:	307c 0004      	movea.w #4,a0
+   4:	2010           	move.l (a0),d0
+   6:	23c0 0000 2064 	move.l d0,2064 <SysBase>
+   c:	4879 0000 004e 	pea 4e <KPrintF+0x24>
+  12:	4eb9 0000 002a 	jsr 2a <KPrintF>
+  18:	588f           	addq.l #4,sp
+  1a:	60fe           	bra.s 1a <_start+0x1a>
+
+0000001c <KPutCharX>:
+  1c:	2f0e           	move.l a6,-(sp)
+  1e:	2c78 0004      	movea.l 4 <_start+0x4>,a6
+  22:	4eae fdfc      	jsr -516(a6)
+  26:	2c5f           	movea.l (sp)+,a6
+  28:	4e75           	rts
+
+0000002a <KPrintF>:
+  2a:	48e7 0032      	movem.l a2-a3/a6,-(sp)
+  2e:	2c79 0000 2064 	movea.l 2064 <SysBase>,a6
+  34:	206f 0010      	movea.l 16(sp),a0
+  38:	43ef 0014      	lea 20(sp),a1
+  3c:	45f9 0000 001c 	lea 1c <KPutCharX>,a2
+  42:	97cb           	suba.l a3,a3
+  44:	4eae fdf6      	jsr -522(a6)
+  48:	4cdf 4c00      	movem.l (sp)+,a2-a3/a6
+  4c:	4e75           	rts
