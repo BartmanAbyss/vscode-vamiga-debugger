@@ -7,7 +7,7 @@ Disassembly of section .text:
 00000000 <_start>:
    0:	307c 0004      	movea.w #4,a0
    4:	2010           	move.l (a0),d0
-   6:	23c0 0000 2064 	move.l d0,2064 <SysBase>
+   6:	23c0 0000 2068 	move.l d0,2068 <SysBase>
    c:	4879 0000 004e 	pea 4e <KPrintF+0x24>
   12:	4eb9 0000 002a 	jsr 2a <KPrintF>
   18:	588f           	addq.l #4,sp
@@ -22,7 +22,7 @@ Disassembly of section .text:
 
 0000002a <KPrintF>:
   2a:	48e7 0032      	movem.l a2-a3/a6,-(sp)
-  2e:	2c79 0000 2064 	movea.l 2064 <SysBase>,a6
+  2e:	2c79 0000 2068 	movea.l 2068 <SysBase>,a6
   34:	206f 0010      	movea.l 16(sp),a0
   38:	43ef 0014      	lea 20(sp),a1
   3c:	45f9 0000 001c 	lea 1c <KPutCharX>,a2

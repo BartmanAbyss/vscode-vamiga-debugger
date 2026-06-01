@@ -9,7 +9,7 @@ Program Header:
     LOAD off    0x00002000 vaddr 0x00000000 paddr 0x00000000 align 2**13
          filesz 0x00000061 memsz 0x00000061 flags r-x
     LOAD off    0x00002064 vaddr 0x00002064 paddr 0x00002064 align 2**13
-         filesz 0x00000000 memsz 0x00000004 flags rw-
+         filesz 0x00000004 memsz 0x00000008 flags rw-
 private flags = 1000000: [m68000]
 
 Sections:
@@ -18,33 +18,33 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, ALLOC, LOAD, RELOC, READONLY, CODE
   1 .rodata       00000013  0000004e  0000004e  0000204e  2**0
                   CONTENTS, ALLOC, LOAD, READONLY, DATA
-  2 .data         00000000  00002064  00002064  00002064  2**2
+  2 .data         00000004  00002064  00002064  00002064  2**2
                   CONTENTS, ALLOC, LOAD, DATA
-  3 .bss          00000004  00002064  00002064  00002064  2**2
+  3 .bss          00000004  00002068  00002068  00002068  2**2
                   ALLOC
-  4 .comment      00000012  00000000  00000000  00002064  2**0
+  4 .comment      00000012  00000000  00000000  00002068  2**0
                   CONTENTS, READONLY
-  5 .debug_aranges 00000028  00000000  00000000  00002076  2**0
+  5 .debug_aranges 00000028  00000000  00000000  0000207a  2**0
                   CONTENTS, RELOC, READONLY, DEBUGGING, OCTETS
-  6 .debug_info   000003a3  00000000  00000000  0000209e  2**0
+  6 .debug_info   000003ba  00000000  00000000  000020a2  2**0
                   CONTENTS, RELOC, READONLY, DEBUGGING, OCTETS
-  7 .debug_abbrev 0000012e  00000000  00000000  00002441  2**0
+  7 .debug_abbrev 00000141  00000000  00000000  0000245c  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
-  8 .debug_line   000002c9  00000000  00000000  0000256f  2**0
+  8 .debug_line   000002c9  00000000  00000000  0000259d  2**0
                   CONTENTS, RELOC, READONLY, DEBUGGING, OCTETS
-  9 .debug_frame  00000058  00000000  00000000  00002838  2**2
+  9 .debug_frame  00000058  00000000  00000000  00002868  2**2
                   CONTENTS, RELOC, READONLY, DEBUGGING, OCTETS
- 10 .debug_str    00000000  00000000  00000000  00002890  2**0
+ 10 .debug_str    00000000  00000000  00000000  000028c0  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 11 .debug_loclists 00000032  00000000  00000000  00002890  2**0
+ 11 .debug_loclists 00000032  00000000  00000000  000028c0  2**0
                   CONTENTS, RELOC, READONLY, DEBUGGING, OCTETS
- 12 .debug_rnglists 0000001f  00000000  00000000  000028c2  2**0
+ 12 .debug_rnglists 0000001f  00000000  00000000  000028f2  2**0
                   CONTENTS, RELOC, READONLY, DEBUGGING, OCTETS
 SYMBOL TABLE:
 00000000 l    d  .text	00000000 .text
 0000004e l    d  .rodata	00000000 .rodata
 00002064 l    d  .data	00000000 .data
-00002064 l    d  .bss	00000000 .bss
+00002068 l    d  .bss	00000000 .bss
 00000000 l    d  .comment	00000000 .comment
 00000000 l    d  .debug_aranges	00000000 .debug_aranges
 00000000 l    d  .debug_info	00000000 .debug_info
@@ -56,12 +56,13 @@ SYMBOL TABLE:
 00000000 l    d  .debug_rnglists	00000000 .debug_rnglists
 00000000 l    df *ABS*	00000000 simple_c.cpp
 00000000 g     F .text	0000001c _start
-00002064 g       .bss	00000000 __bss_start
+00002064 g     O .data	00000004 global_a
+00002068 g       .bss	00000000 __bss_start
 0000001c g       .text	00000000 KPutCharX
 0000002a g     F .text	00000024 KPrintF
-00002064 g       .data	00000000 _edata
-00002068 g       .bss	00000000 _end
-00002064 g     O .bss	00000004 SysBase
+00002068 g       .data	00000000 _edata
+0000206c g       .bss	00000000 _end
+00002068 g     O .bss	00000004 SysBase
 
 
 RELOCATION RECORDS FOR [.text]:
@@ -86,12 +87,13 @@ OFFSET   TYPE              VALUE
 00000111 R_68K_32          .debug_rnglists+0x0000000c
 00000119 R_68K_32          .debug_line
 0000020d R_68K_32          .bss
-0000023f R_68K_32          .text
-00000255 R_68K_32          .text+0x0000002a
-0000027d R_68K_32          .debug_loclists+0x0000000c
-00000282 R_68K_32          .text+0x0000002e
-000002c1 R_68K_32          .debug_loclists+0x0000000c
-00000306 R_68K_32          .text+0x0000002e
+00000239 R_68K_32          .data
+00000262 R_68K_32          .text
+00000278 R_68K_32          .text+0x0000002a
+000002a0 R_68K_32          .debug_loclists+0x0000000c
+000002a5 R_68K_32          .text+0x0000002e
+000002e4 R_68K_32          .debug_loclists+0x0000000c
+00000329 R_68K_32          .text+0x0000002e
 
 
 RELOCATION RECORDS FOR [.debug_line]:

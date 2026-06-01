@@ -25,6 +25,8 @@ void KPrintF(const char* fmt, ...) {
 	RawDoFmt((CONST_STRPTR)fmt, vl, KPutCharX, 0);
 }
 
+int global_a = 0x11111111;
+
 extern "C"
 __attribute__((used)) __attribute__((section(".text.unlikely"))) void _start() {
 	SysBase = *((struct ExecBase**)4UL);
