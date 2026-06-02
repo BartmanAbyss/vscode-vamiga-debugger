@@ -49,8 +49,10 @@ DWARF).
 - `dwarfParser.ts` / `dwarfSourceMap.ts` — DWARF line programs, DIEs, `.debug_frame` CFA;
   `sourceMapFromDwarf` builds the SourceMap.
 - Other managers: `breakpointManager`, `stackManager`, `variablesManager`, `evaluateManager`,
-  `disassemblyManager`, `amigaHunkParser`.
-- **Tests:** jest, `npm test` (410 passing as of last sync). Fixtures in
+  `cExpressionEvaluator`, `disassemblyManager`, `amigaHunkParser`.
+- `extension.ts` — `activate()` registers the DAP factory and an `EvaluatableExpressionProvider`
+  (c/cpp) for hover.
+- **Tests:** jest, `npm test` (474 passing as of last sync). Fixtures in
   `src/test/fixtures/amigaPrograms/` are compiled with `m68k-amiga-elf-gcc`, `-Ttext=0` so ELF
   virtual addresses == file offsets. `src/test/fixtures/amigaPrograms/simple_c/` contains private test cases. only numbered subdirectories (`01_inline`, `02_pointer`, etc.) should be included in PRs against `upstream`
 
@@ -71,6 +73,25 @@ DWARF).
   first-wins; the policy lives entirely in `sourceMapFromDwarf`.
 - **Line-granularity stepping** is gated on DWARF being present; assembly with no DWARF falls back to
   instruction granularity transparently.
+- **C/C++ expression evaluation & value editing** (hover, Watch, Debug Console): a *typed-lvalue*
+  layer over the DWARF `TypeDescriptor` model. `cExpressionEvaluator` tokenizes/parses the navigation
+  subset (`.` `->` `[]` `*` `&`, parens) and navigates to an `{address, type}`; `variablesManager`
+  renders it (`renderLValue` — identical formatting to the Locals/Globals views) and writes it
+  (`writeScalar` for memory, `writeRegister` for CPU/custom registers). `evaluateManager` orchestrates:
+  **try the C/C++ path first, fall back to the assembly `expr-eval` path** (registers, symbols,
+  arithmetic, peek/poke functions) — same dispatch for reads (`evaluateFormatted`) and writes
+  (`setExpression`). The two paths are kept strictly separate; a C miss returns `undefined` so the
+  assembly path runs unchanged.
+- **Hover specifics:** the result folds the type into the value string because VS Code doesn't show
+  the DAP `type` on the *hovered root* (microsoft/vscode#244477). The `EvaluatableExpressionProvider`
+  widens the hovered range to the member/arrow/index chain **truncated at the hovered token** (so
+  hovering `a` in `a->b` evaluates `a`, hovering `b` evaluates `a->b` — matches TypeScript). Leading
+  `*`/`&` aren't auto-captured on hover.
+- **Value editing ("Set Value"):** works in the Watch panel (`setExpression`) and the Variables view
+  (`setVariable` extended to locals/globals/struct fields/array elements). Scalar leaf rows
+  (primitives/pointers) are no longer tagged `readOnly`, which is what ungrays the action. `writeScalar`
+  / `writeRegister` are the single write primitives shared by both. Scalars only — structs/arrays
+  stay read-only.
 
 ## Conventions / gotchas
 - **Preserve existing comments** when editing code — do not strip comments that are already there.
