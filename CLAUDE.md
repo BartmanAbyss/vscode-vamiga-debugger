@@ -66,6 +66,20 @@ DWARF).
   (in `vAmiga_action_script.js`).
 
 ## Design notes worth knowing
+- **Kickstart ROM symbols:** when `emulatorOptions.kickstartRomPath` is set, `launchRequest` hashes
+  the ROM (sha1) and looks it up in `src/kickstartSymbols.ts` — an **auto-generated** data module
+  (`sha1 → { size, [name, offsetFromBase][] }`) covering 6 known ROMs (1.2–3.1). `kickstart.ts`
+  (`kickstartSymbolModule`) relocates the offsets to absolute addresses at the ROM base
+  (`0x1000000 - romSize`: 256K→`0xFC0000`, 512K→`0xF80000`) and returns a `.kick` `Segment` +
+  symbol map, which `attach()` merges via `SourceMap.addSymbolModule`. **The ROM region MUST be
+  added as a Segment** or `findSymbolOffset`/`lookupAddress` (both gated on `findSegmentForAddress`)
+  won't resolve ROM addresses — that's the whole point (OS calls show e.g. `OpenLibrary+0x4` in the
+  stack/disassembly). Unknown/unreadable ROM → `undefined`, launch continues silently. No source
+  lines are added (there's no ROM source); `getSymbolLengths()` derives sizes from address ordering.
+  - The symbol data is **pre-processed offline** (the old `vscode-amiga-debug` Kickstart scanner
+    produced `kick_<sha1>.elf` files); we do NOT scan ROMs at runtime. Regenerate with
+    `npm run gen:kickstart-symbols` (reads `kickstart/symbols/*.elf`, a dependency-free `.symtab`
+    reader in `scripts/gen-kickstart-symbols.mjs`).
 - **C/C++ vs assembly address→line policy:** a C/C++ compiler emits the function-prologue line and
   the first statement at the *same* address. `sourceMapFromDwarf` deduplicates per address with a
   file-extension test (`/\.[ch]\w*$/i`): C/C++ → **last-wins** (keep the statement), assembly →
