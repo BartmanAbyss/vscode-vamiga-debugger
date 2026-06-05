@@ -49,10 +49,12 @@ DWARF).
 - `dwarfParser.ts` / `dwarfSourceMap.ts` — DWARF line programs, DIEs, `.debug_frame` CFA;
   `sourceMapFromDwarf` builds the SourceMap.
 - Other managers: `breakpointManager`, `stackManager`, `variablesManager`, `evaluateManager`,
-  `cExpressionEvaluator`, `disassemblyManager`, `amigaHunkParser`.
+  `cExpressionEvaluator`, `disassemblyManager`, `amigaHunkParser`, `profilerManager`.
+- **CPU profiler** (`profilerManager.ts`, `unwindTable.ts`, `profilerViewerProvider.ts`,
+  webview `src/webview/profilerViewer/`): see the Design note below.
 - `extension.ts` — `activate()` registers the DAP factory and an `EvaluatableExpressionProvider`
   (c/cpp) for hover.
-- **Tests:** jest, `npm test` (474 passing as of last sync). Fixtures in
+- **Tests:** jest, `npm test` (500 passing as of last sync). Fixtures in
   `src/test/fixtures/amigaPrograms/` are compiled with `m68k-amiga-elf-gcc`, `-Ttext=0` so ELF
   virtual addresses == file offsets. `src/test/fixtures/amigaPrograms/simple_c/` contains private test cases. only numbered subdirectories (`01_inline`, `02_pointer`, etc.) should be included in PRs against `upstream`
 
@@ -66,6 +68,26 @@ DWARF).
   (in `vAmiga_action_script.js`).
 
 ## Design notes worth knowing
+- **CPU profiler (flame graph):** captures one frame of per-instruction execution with reconstructed
+  call stacks, ported/improved from the old `vscode-amiga-debug`+WinUAE profiler. Pipeline: DWARF
+  `.debug_frame` → `dwarfParser.evaluateUnwindRows` (rows of constant unwind state, **relocation-aware**
+  via `relocatedDebugFrame`) → `unwindTable.buildUnwindTable` packs a 6-byte `{cfa,r13,ra}`
+  entry per 2-byte code location (range derived from the rows, not segments; first-row-wins) →
+  uploaded to wasm → **`vamigaweb_fork/Core/Profiler/CpuProfiler`** (fork-local C++; flag-gated Moira
+  `execute()` hooks behind `State::PROFILING = 1<<10`; unwinds A5/A7 per instruction) →
+  `wasm_profile_*` exports (capture is **frame-aligned**: one `finishFrame()` before enabling so it
+  starts at a frame boundary, never mid-frame) → `vAmiga_ui.js` RPC bridge (**binary** via HEAPU8,
+  no JSON/base64) → `profilerManager` (`decodeProfileStream` of the `[depth,…pcs(leaf-first),cycles]`
+  stream + `buildCallTree` symbolicating each distinct PC once via `findSymbolOffset`/`lookupAddress`)
+  → webview. All C++ edits to upstream files are minimal one-liners tagged `// [vscode-vamiga-debugger
+  cpu profiler]`; see `vamigaweb_fork/FORK_NOTES.md`. **Webview is staged:** a lean canvas flame graph
+  (`src/webview/profilerViewer/`, consumes the `ProfileResult` call tree directly) is built first;
+  the richer WebGL renderer + DMA/copper/disassembly views are a later graft. That graft will move
+  the profiler webview to its **own esbuild context aliasing `react`→`preact/compat`** (so the old
+  Preact client ports unchanged) — the lean component is written framework-neutral (`import from
+  "react"`) so it needs no code change when the bundle flips. Multi-frame and live/continuous capture
+  are deferred future phases. Command: **"VAmiga: Open CPU Profiler"** — auto-captures one frame on
+  open (and a "Capture frame" button re-captures on demand); each capture advances the emulator a frame.
 - **Kickstart ROM symbols:** when `emulatorOptions.kickstartRomPath` is set, `launchRequest` hashes
   the ROM (sha1) and looks it up in `src/kickstartSymbols.ts` — an **auto-generated** data module
   (`sha1 → { size, [name, offsetFromBase][] }`) covering 6 known ROMs (1.2–3.1). `kickstart.ts`
