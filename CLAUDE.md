@@ -78,16 +78,34 @@ DWARF).
   `wasm_profile_*` exports (capture is **frame-aligned**: one `finishFrame()` before enabling so it
   starts at a frame boundary, never mid-frame) → `vAmiga_ui.js` RPC bridge (**binary** via HEAPU8,
   no JSON/base64) → `profilerManager` (`decodeProfileStream` of the `[depth,…pcs(leaf-first),cycles]`
-  stream + `buildCallTree` symbolicating each distinct PC once via `findSymbolOffset`/`lookupAddress`)
-  → webview. All C++ edits to upstream files are minimal one-liners tagged `// [vscode-vamiga-debugger
-  cpu profiler]`; see `vamigaweb_fork/FORK_NOTES.md`. **Webview is staged:** a lean canvas flame graph
-  (`src/webview/profilerViewer/`, consumes the `ProfileResult` call tree directly) is built first;
-  the richer WebGL renderer + DMA/copper/disassembly views are a later graft. That graft will move
-  the profiler webview to its **own esbuild context aliasing `react`→`preact/compat`** (so the old
-  Preact client ports unchanged) — the lean component is written framework-neutral (`import from
-  "react"`) so it needs no code change when the bundle flips. Multi-frame and live/continuous capture
-  are deferred future phases. Command: **"VAmiga: Open CPU Profiler"** — auto-captures one frame on
-  open (and a "Capture frame" button re-captures on demand); each capture advances the emulator a frame.
+  stream → `InstructionSample[]`). All C++ edits to upstream files are minimal one-liners tagged
+  `// [vscode-vamiga-debugger cpu profiler]`; see `vamigaweb_fork/FORK_NOTES.md`.
+  - **Per-sample stream is retained** (`ProfilerManager.getSamples()`) as a first-class artifact —
+    later coverage / disassembly-tracing phases need per-instruction PC+cycle data, not just the chart.
+  - **Webview renders a time-ordered flame chart (Phase 2).** `profilerManager.buildProfileModel`
+    turns the samples into an `IProfileModel` (`nodes`/`locations`/`samples`/`timeDeltas`/`duration`,
+    symbolicating each distinct PC once via `findSymbolOffset`/`lookupAddress`; node 0 is a synthetic
+    root) and posts it. The webview (`src/webview/profilerViewer/`, **React 2D-canvas**) ports the old
+    `buildColumns` (`columns.ts`) into a time-ordered column layout (x = cycles in execution order,
+    adjacent identical stacks merged) and `FlameGraph.tsx` draws it. Interaction: **double-click**
+    zooms a box, **mouse-wheel** zooms at the cursor, **arrows/Enter/Esc** navigate, single click
+    selects, **Ctrl/Cmd+click** jumps to source (posts `openDocument` → provider opens the file).
+    A toolbar **filter** box dims non-matching boxes (`filter.ts`) and a **unit** dropdown switches
+    the time axis/tooltip between cycles/µs/rasterlines/%-frame (`display.ts`). Unit conversions use
+    **per-capture emulator timing, not a hardcoded clock**: `wasm_profile_start` brackets the profiled
+    frame with `cpu->getClock()` to measure `frameCycles` and reads `agnus->isPAL()`; both ride the
+    `get_data` JSON into the model. Normalising by the measured `frameCycles` makes every unit correct
+    regardless of CPU revision (68000/10/20), overclocking, master-clock boost, or PAL/NTSC — the
+    same need the old WinUAE profiler met with `baseClock`/`cpuCycleUnit`, but measured instead of
+    assumed (Moira counts whole CPU cycles, so there's no sub-cycle-unit divisor).
+    `buildCallTree`/`ProfileResult` (the aggregated merged tree) stays in `profilerManager` for a
+    possible future function-table view.
+  - **Deliberately deferred** (the `IColumn`/`IBox` model stays compatible): the **WebGL** box
+    renderer + `TextCache` glyph atlas (only worth it at multi-frame/live scale — text is 2D-canvas
+    either way), the **Preact/compat** bundle isolation, and the **DMA/copper/blitter/custom-register**
+    overlays. Multi-frame and live/continuous capture are also future phases.
+  - Command: **"VAmiga: Open CPU Profiler"** — auto-captures one frame on open (and a "Capture frame"
+    button re-captures on demand); each capture advances the emulator a frame.
 - **Kickstart ROM symbols:** when `emulatorOptions.kickstartRomPath` is set, `launchRequest` hashes
   the ROM (sha1) and looks it up in `src/kickstartSymbols.ts` — an **auto-generated** data module
   (`sha1 → { size, [name, offsetFromBase][] }`) covering 6 known ROMs (1.2–3.1). `kickstart.ts`
