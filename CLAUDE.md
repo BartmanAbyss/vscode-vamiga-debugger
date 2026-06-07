@@ -155,6 +155,20 @@ DWARF).
   first-wins; the policy lives entirely in `sourceMapFromDwarf`.
 - **Line-granularity stepping** is gated on DWARF being present; assembly with no DWARF falls back to
   instruction granularity transparently.
+- **CPU profiler unwinding — DWARF primary, branch-stack fallback:** the profiler reconstructs each
+  sample's call stack two ways, chosen automatically in `CpuProfiler::start()`. DWARF `.debug_frame`
+  (C/C++) is primary — it also yields inlined frames (`expandPc`) and works mid-prologue. For
+  **assembly / hunk programs with no `.debug_frame`**, `profilerManager.capture` uploads an *empty*
+  unwind table (+ the CODE-segment range), which makes the emulator fall back to a **runtime
+  branch-stack**: Moira hooks on JSR/BSR (push) / RTS/RTE (pop) / exception+interrupt entry maintain a
+  shadow call stack, ported 1:1 from WinUAE's `debugmem.cpp` `branch_stack_*` (two stacks keyed on the
+  S-bit for USP/SSP, pop matched by return PC, `popRte` always unwinds the supervisor stack, IRQ/
+  exception entry bridges handler→interrupted code so `[IRQ]`-style frames appear). The shadow stack is
+  seeded at capture start by a return-address scan that **mirrors `stackManager.ts` `guessStack` — keep
+  the two in sync**. The emitted `[depth,…pcs,cycles]` stream is identical for both methods, so the
+  decode/webview/`.vamigaprofile` pipeline is method-agnostic. Symbols for asm come from the hunk
+  symbol table (`lookupAddress`), no DWARF needed. See `vamigaweb_fork/FORK_NOTES.md` for the hook table
+  and the (documented) deviations from WinUAE.
 - **C/C++ expression evaluation & value editing** (hover, Watch, Debug Console): a *typed-lvalue*
   layer over the DWARF `TypeDescriptor` model. `cExpressionEvaluator` tokenizes/parses the navigation
   subset (`.` `->` `[]` `*` `&`, parens) and navigates to an `{address, type}`; `variablesManager`
