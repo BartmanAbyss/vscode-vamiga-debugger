@@ -54,7 +54,7 @@ DWARF).
   webview `src/webview/profilerViewer/`): see the Design note below.
 - `extension.ts` — `activate()` registers the DAP factory and an `EvaluatableExpressionProvider`
   (c/cpp) for hover.
-- **Tests:** jest, `npm test` (500 passing as of last sync). Fixtures in
+- **Tests:** jest, `npm test` (527 passing as of last sync). Fixtures in
   `src/test/fixtures/amigaPrograms/` are compiled with `m68k-amiga-elf-gcc`, `-Ttext=0` so ELF
   virtual addresses == file offsets. `src/test/fixtures/amigaPrograms/simple_c/` contains private test cases. only numbered subdirectories (`01_inline`, `02_pointer`, etc.) should be included in PRs against `upstream`
 
@@ -106,6 +106,34 @@ DWARF).
     overlays. Multi-frame and live/continuous capture are also future phases.
   - Command: **"VAmiga: Open CPU Profiler"** — auto-captures one frame on open (and a "Capture frame"
     button re-captures on demand); each capture advances the emulator a frame.
+  - **DMA profiling (Phase 4):** captured in the **same frame** as the CPU profile (rides
+    `wasm_profile_start`), so the two share one timeline. The fork-local
+    **`vamigaweb_fork/Core/Profiler/DmaProfiler`** mirrors Agnus's per-line `busOwner/busAddr/busData`
+    at EOL into a frame-wide **enriched grid** — one 8-byte `{owner,flags,data,addr}` cell per
+    dma-cycle. The two things the bus arrays lack are added as a `flags` byte stamped at the write
+    sites: **read-vs-write** + **byte-vs-word** (for memory reconstruction), the **CPU Code/Data** bit
+    (from Moira's function code `fcl`), and a 2-bit **Copper MOVE/WAIT/SKIP** sub-state. All hooks are
+    one-liners gated inline by `DmaProfiler::enabled()` (zero cost to normal emulation); see
+    `FORK_NOTES.md`. The grid is **a single stream serving both** visualization and reconstruction
+    (à la WinUAE's `dma_rec`, but leaner — the slot's position is its timestamp, so no per-event clock).
+    `wasm_dma_get_data` (grid) + `wasm_dma_get_snapshot` (chip/slow RAM baseline) read it back as
+    binary via HEAPU8. `src/dma.ts` (extension) decodes the grid into `IDmaModel` (4 parallel typed
+    arrays on `model.dma`). The **unwired** reconstruction helpers (`reconstructMemoryAt` /
+    `reconstructCustomRegs`) live webview-side in `src/webview/profilerViewer/reconstruct.ts` (that's
+    where future memory/screen/blitter consumers are). Both reconstruction inputs ride the posted
+    model: `model.dma` (grid) + `model.dmaSnapshot` (chip/slow RAM baseline at capture start). `profilerManager` retains the grid +
+    snapshot via `getReconstructionData()`. **Webview:** `src/webview/profilerViewer/dma.ts`
+    (`channelStyle(owner,flags)` → old-extension colors; CPU split Code/Data, Copper MOVE/WAIT/SKIP);
+    `FlameGraph.tsx` draws a **DMA band** above the CPU rows directly off the typed arrays (coalescing
+    same-color runs at draw time, one cell per tooltip — addr/value/R-W); `topDownGraph.createTopDownGraph`
+    groups the TimeView under two top-level nodes — **"CPU"** (the function call tree) and **"DMA"**
+    (per-type subgroups: Copper→Move/Wait/Skip, Bitplane→planes, Sprite, Audio; Blitter/Disk/Refresh as
+    direct leaves), mirroring the old extension — with per-channel time = CPU-cycle-equiv (`slots*duration/slotCount`).
+    DMA-line x = `slotIndex / owner.length`, CPU-flame x = `cpuClock / duration` — both span the same
+    frame so they align with no conversion. **Scope:** PAL only; Blitter is a single color (per-channel
+    Fill/Line deferred to the blitter-visualizer phase, which needs `SlowBlitter` state); WinUAE
+    `DmaEvents` tooltips skipped. Known reconstruction gaps (documented in `dma.ts`/`FORK_NOTES.md`):
+    deferred custom-register baseline, copper color-register writes (bypass the bus), FAST-RAM writes.
 - **Kickstart ROM symbols:** when `emulatorOptions.kickstartRomPath` is set, `launchRequest` hashes
   the ROM (sha1) and looks it up in `src/kickstartSymbols.ts` — an **auto-generated** data module
   (`sha1 → { size, [name, offsetFromBase][] }`) covering 6 known ROMs (1.2–3.1). `kickstart.ts`
