@@ -169,6 +169,19 @@ DWARF).
   decode/webview/`.vamigaprofile` pipeline is method-agnostic. Symbols for asm come from the hunk
   symbol table (`lookupAddress`), no DWARF needed. See `vamigaweb_fork/FORK_NOTES.md` for the hook table
   and the (documented) deviations from WinUAE.
+- **Profiler synthetic buckets `[IRQ]`/`[Kickstart]`/`[External]` (WinUAE-faithful):** the emulator no
+  longer drops out-of-program samples (`CpuProfiler::endInstr`) — OS/ROM/external cycles are emitted so
+  the top-level **CPU** total reaches ~100% (it was ~75%). The host classifies a leaf PC in
+  `profilerManager.syntheticLabel`: `IRQ_MARKER` (0xFFFFFFFE) → `[IRQ]`; ROM range `[0xF80000,0x1000000)`
+  → `[Kick] <name>` when Kickstart symbols are loaded (the `.kick` module; name-only so a ROM routine
+  like `WaitBlit` aggregates into one node) else flat `[Kickstart]`; a loaded program segment → normal;
+  else → `[External]`. `[IRQ]` is the interrupt/exception **dispatch-gap** — the emulator emits it from
+  the no-op `endInstr` at the dispatch site (where the elapsed-cycle gap is observable; the gap doesn't
+  surface at the following `beginInstr`), mirroring WinUAE's `0x7fff'ffff` marker. Out-of-program
+  (`[Kick]`/`[External]`) **and in-program no-CFI** leaves (an `#embed`'d binary / hand-asm called via
+  `jsr`, e.g. ThePlayer — symbolized but no DWARF CFI, so the emulator emits it depth-1) nest *below*
+  the calling function via `applyContextReuse` (ports the old ext's `lastCallstack` reuse; `getCfaForPc`
+  is the no-CFI signal — real C always has CFI); `[IRQ]` stays standalone. Stream format unchanged.
 - **C/C++ expression evaluation & value editing** (hover, Watch, Debug Console): a *typed-lvalue*
   layer over the DWARF `TypeDescriptor` model. `cExpressionEvaluator` tokenizes/parses the navigation
   subset (`.` `->` `[]` `*` `&`, parens) and navigates to an `{address, type}`; `variablesManager`
