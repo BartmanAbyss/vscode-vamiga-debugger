@@ -130,10 +130,28 @@ DWARF).
     (per-type subgroups: Copper→Move/Wait/Skip, Bitplane→planes, Sprite, Audio; Blitter/Disk/Refresh as
     direct leaves), mirroring the old extension — with per-channel time = CPU-cycle-equiv (`slots*duration/slotCount`).
     DMA-line x = `slotIndex / owner.length`, CPU-flame x = `cpuClock / duration` — both span the same
-    frame so they align with no conversion. **Scope:** PAL only; Blitter is a single color (per-channel
-    Fill/Line deferred to the blitter-visualizer phase, which needs `SlowBlitter` state); WinUAE
-    `DmaEvents` tooltips skipped. Known reconstruction gaps (documented in `dma.ts`/`FORK_NOTES.md`):
-    deferred custom-register baseline, copper color-register writes (bypass the bus), FAST-RAM writes.
+    frame so they align with no conversion. **Scope:** PAL only; the DMA band's Blitter is a single
+    color (per-mode Copy/Fill/Line is the separate **blitter line**, below); WinUAE `DmaEvents` tooltips
+    skipped. Known reconstruction gaps (documented in `dma.ts`/`FORK_NOTES.md`): deferred custom-register
+    baseline, copper color-register writes (bypass the bus), FAST-RAM writes.
+  - **Blitter line (flame graph):** a second band directly below the DMA line — one box per blit,
+    colored by mode (Copy/Fill/Line) — reconstructed **entirely host/webview-side from the captured DMA
+    grid** (`src/webview/profilerViewer/blits.ts` `getBlits`), **no emulator change**. vAmiga's default
+    `BLITTER_ACCURACY=2` (SlowBlitter) already stamps `owner==BLITTER` per cycle with the WRITE flag on
+    the D write, so the grid carries everything (the earlier "needs `SlowBlitter` state" worry was moot).
+    Per blit: **start** = a `BLTSIZE`(OCS)/`BLTSIZH`(ECS) write; config from shadowing register WRITE
+    cells (BLTCON0/1, BLTxPT, BLTxMOD, masks); **end** = the final D-channel write (WinUAE's `BLIFINALD`),
+    more accurate than the old ext's empirical `BLITIRQ+8`. **CRITICAL:** register detection gates on the
+    `DMA_WRITE` flag — vAmiga leaves a stale `busAddr` on idle cells (WinUAE leaves it undefined), so
+    address-range-only matching invents phantom `BLTSIZE` writes (18 blits vs the correct 17 for the
+    `template` capture). `FlameGraph.tsx` draws the band (x = `startSlot/N`, same mapping as the DMA band)
+    with a full **parity tooltip** (size, BLTCON/minterm chips via `blitMinterm.ts`'s flag enums + 256-entry
+    `BlitOp` table, per-channel source/dest + shift/modulo, channel-A masks, start/end/duration). Falls back
+    to a `W·H·channels` estimate + an on-band note if a capture ran a FastBlitter (no blitter cells; the
+    `fastBlitter` flag). **No pre-capture register baseline** (write-only blitter regs), so config set before
+    the captured frame reconstructs from 0 — rarely bites (regs rewritten right before `BLTSIZE`). **Deferred:**
+    the blitted-image preview, and the TimeView Blitter Fill/Line split (DMA band + topDownGraph Blitter node
+    stay single-color). Verified against WinUAE/vAmiga source + the captured grid; see the `blits.ts` header.
 - **Kickstart ROM symbols:** when `emulatorOptions.kickstartRomPath` is set, `launchRequest` hashes
   the ROM (sha1) and looks it up in `src/kickstartSymbols.ts` — an **auto-generated** data module
   (`sha1 → { size, [name, offsetFromBase][] }`) covering 6 known ROMs (1.2–3.1). `kickstart.ts`
